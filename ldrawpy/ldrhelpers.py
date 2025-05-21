@@ -232,6 +232,7 @@ def preset_aspect(current_aspect, aspect_change):
                 new_aspect = (-35, new_aspect[1], new_aspect[2])
     return norm_aspect(new_aspect)
 
+
 def clean_line(line):
     sl = line.split()
     nl = []
@@ -247,6 +248,7 @@ def clean_line(line):
         nl.append(" ")
     nl = "".join(nl).rstrip()
     return nl
+
 
 def clean_file(fn, fno=None, verbose=False, as_str=False):
     """Cleans an LDraw file by changing all floating point numbers to

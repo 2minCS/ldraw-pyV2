@@ -33,7 +33,7 @@ def check_python_version():
 def read_package_variable(key, filename="__init__.py"):
     """Read the value of a variable from the package without importing."""
     module_path = os.path.join(PACKAGE_NAME, filename)
-    with open(module_path, encoding="utf-8") as module: # Added encoding
+    with open(module_path, encoding="utf-8") as module:  # Added encoding
         for line in module:
             parts = line.strip().split(" ", 2)
             if parts[:-1] == [key, "="]:
@@ -48,8 +48,8 @@ def build_description():
         with open(readme_path, "r", encoding="utf-8") as f:
             readme = f.read()
     except IOError:
-        readme = "A Python utility package for creating, modifying, and reading LDraw files and data structures." # Fallback
-    
+        readme = "A Python utility package for creating, modifying, and reading LDraw files and data structures."  # Fallback
+
     # If you create a CHANGELOG.md and want to include it:
     # changelog_path = "CHANGELOG.md"
     # try:
@@ -65,18 +65,18 @@ check_python_version()
 
 setuptools.setup(
     name=read_package_variable("__project__"),
-    version=read_package_variable("__version__"), 
+    version=read_package_variable("__version__"),
     description="A Python utility package (V2) for creating, modifying, and reading LDraw files and data structures.",
     long_description=build_description(),
     long_description_content_type="text/markdown",
-    url="https://github.com/2minCS/ldraw-pyV2", 
-    author="Casey Mauldin", 
-    author_email="dw4pres@gmail.com", 
+    url="https://github.com/2minCS/ldraw-pyV2",
+    author="Casey Mauldin",
+    author_email="dw4pres@gmail.com",
     license="MIT",
     packages=setuptools.find_packages(exclude=["tests", "tests.*"]),
     python_requires=f">={MINIMUM_PYTHON_VERSION_STR}",
     classifiers=[
-        "Development Status :: 2 - Pre-Alpha", # Adjusted for a V2 effort
+        "Development Status :: 2 - Pre-Alpha",  # Adjusted for a V2 effort
         "Natural Language :: English",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
@@ -99,7 +99,7 @@ setuptools.setup(
     ],
     entry_points={
         "console_scripts": [
-            "ldrcat=ldrawpy.scripts.ldrcat:main", # Or ldrcat-v2 if you change the script name
+            "ldrcat=ldrawpy.scripts.ldrcat:main",  # Or ldrcat-v2 if you change the script name
         ]
-    }
+    },
 )

@@ -137,15 +137,43 @@ class LDViewRender:
 
     def snapshot_settings(self):
         self.settings_snapshot = {}
-        for key in ["page_width", "page_height", "auto_crop", "image_smooth", "no_lines", "wireframe", "quality_lighting", "scale",
-        "log_output", "log_level", "overwrite", "texmaps", "flat_shading", "specular"]:
+        for key in [
+            "page_width",
+            "page_height",
+            "auto_crop",
+            "image_smooth",
+            "no_lines",
+            "wireframe",
+            "quality_lighting",
+            "scale",
+            "log_output",
+            "log_level",
+            "overwrite",
+            "texmaps",
+            "flat_shading",
+            "specular",
+        ]:
             self.settings_snapshot[key] = self.__dict__[key]
 
     def restore_settings(self):
         if self.settings_snapshot is None:
             return
-        for key in ["page_width", "page_height", "auto_crop", "image_smooth", "no_lines", "wireframe", "quality_lighting", "scale",
-        "log_output", "log_level", "overwrite", "texmaps", "flat_shading", "specular"]:
+        for key in [
+            "page_width",
+            "page_height",
+            "auto_crop",
+            "image_smooth",
+            "no_lines",
+            "wireframe",
+            "quality_lighting",
+            "scale",
+            "log_output",
+            "log_level",
+            "overwrite",
+            "texmaps",
+            "flat_shading",
+            "specular",
+        ]:
             self.__dict__[key] = self.settings_snapshot[key]
 
     def set_page_size(self, width, height):
