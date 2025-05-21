@@ -94,9 +94,8 @@ setuptools.setup(
     install_requires=[
         "pillow",
         "rich",
-        # Point to YOUR fork of toolbox-py and a specific commit or tag
-        # Replace YourUsername and YOUR_TOOLBOX_PY_COMMIT_HASH_OR_TAG
-        "toolbox-py @ git+https://github.com/2minCS/toolbox-py.git@2be0b001e83ec15a6f0db137741292d77b57c1be",
+        # Fixed dependency issue with actions expecting toolbox not toolbox-py
+        "toolbox @ git+https://github.com/2minCS/toolbox-py.git@2be0b001e83ec15a6f0db137741292d77b57c1be",
     ],
     entry_points={
         "console_scripts": [
