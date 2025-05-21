@@ -3,8 +3,8 @@
 import os
 
 # fmt: off
-__project__ = 'ldrawpy'
-__version__ = '0.6.0'
+__project__ = 'ldrawpyV2'
+__version__ = '0.6.1a'
 # fmt: on
 
 VERSION = __project__ + "-" + __version__
