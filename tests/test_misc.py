@@ -1,12 +1,13 @@
 # tests/test_misc.py
 
 import os
+
 # import sys # sys is not used, can be removed
 import pytest
-from pathlib import Path # For robust path handling
+from pathlib import Path  # For robust path handling
 
 # from toolbox import * # TODO: Refactor this wildcard import later
-from ldrawpy import clean_file # Import specific function needed
+from ldrawpy import clean_file  # Import specific function needed
 
 # Get the directory of the current test file (tests/)
 TEST_FILE_DIR = Path(__file__).parent
@@ -14,6 +15,7 @@ TEST_FILE_DIR = Path(__file__).parent
 # Construct the path to the input test file relative to this test script's directory
 # tests/test_files/testfile2.ldr
 FIN_PATH = TEST_FILE_DIR / "test_files" / "testfile2.ldr"
+
 
 def test_cleanup():
     # Convert Path objects to strings, as clean_file likely expects string paths
