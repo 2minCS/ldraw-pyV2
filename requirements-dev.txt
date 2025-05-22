@@ -6,7 +6,5 @@ flake8
 black
 mypy
 numpy
+cv2
 # coverage # Optional: for code coverage later
-
-# Placeholder for toolbox-py if you choose to install it this way:
-# toolbox-py @ git+https://github.com/michaelgale/toolbox-py.git@YOUR_CHOSEN_COMMIT_HASH
