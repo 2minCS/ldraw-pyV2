@@ -94,6 +94,7 @@ setuptools.setup(
     install_requires=[
         "pillow",
         "rich",
+        "numpy", # Added to correct CI issues with toolbox
         # Fixed dependency issue with actions expecting toolbox not toolbox-py
         "toolbox @ git+https://github.com/2minCS/toolbox-py.git@2be0b001e83ec15a6f0db137741292d77b57c1be",
     ],
