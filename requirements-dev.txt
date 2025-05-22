@@ -5,6 +5,7 @@ rich
 flake8
 black
 mypy
+numpy
 # coverage # Optional: for code coverage later
 
 # Placeholder for toolbox-py if you choose to install it this way:
