@@ -23,18 +23,33 @@
 #
 # LDView render class and helper functions
 
-import os, tempfile
-import datetime
-import subprocess, shlex
-import crayons
-from datetime import datetime
+import os
+import tempfile
+import datetime  # Keep this import
+import subprocess
+import shlex
+
+# from datetime import datetime # REMOVED THIS LINE - Caused redefinition
 from collections import defaultdict
 from PIL import Image, ImageOps, ImageChops, ImageFilter, ImageEnhance
 
-from toolbox import *
-from ldrawpy import *
+# Explicit imports from toolbox
+# Note: 'crayons' was mentioned in comments but not explicitly imported or used in the simplified _coord_str.
+# If 'crayons' is needed, it should be added as a dependency and imported.
+from toolbox import (
+    apply_params,
+    logmsg,
+    split_path,
+    full_path,
+    colour_path_str,  # This function uses 'crayons' in toolbox, ensure 'crayons' is a dependency if used.
+    Vector,
+)
 
-LDVIEW_BIN = "/Applications/LDView.app/Contents/MacOS/LDView"
+# from ldrawpy import * # This will be refactored later with specific imports
+
+LDVIEW_BIN = (
+    "/Applications/LDView.app/Contents/MacOS/LDView"  # Needs to be configurable
+)
 LDVIEW_DICT = {
     "DefaultMatrix": "1,0,0,0,1,0,0,0,1",
     "SnapshotSuffix": ".png",
@@ -67,31 +82,61 @@ LDVIEW_DICT = {
 LDU_DISTANCE = 114591
 
 
-def camera_distance(scale=1.0, dpi=300, page_width=8.5):
+def camera_distance(
+    scale: float = 1.0, dpi: int = 300, page_width: float = 8.5
+) -> float:
     one = 20 * 1 / 64 * dpi * scale
     sz = page_width * dpi / one * LDU_DISTANCE * 0.775
     sz *= 1700 / 1000
     return sz
 
 
-def _coord_str(x, y=None, sep=", "):
+def _coord_str(x, y=None, sep: str = ", ") -> str:
+    # Simplified version, does not use crayons.
+    # If crayons is intended, it needs to be a dependency and imported.
+    # import crayons
     if isinstance(x, (tuple, list)):
         a, b = float(x[0]), float(x[1])
     else:
-        a, b = float(x), float(y)
+        a, b = float(x), float(y)  # type: ignore
     sa = ("%f" % (a)).rstrip("0").rstrip(".")
     sb = ("%f" % (b)).rstrip("0").rstrip(".")
-    s = []
-    s.append(str(crayons.yellow("%s" % (sa))))
-    s.append(sep)
-    s.append(str(crayons.yellow("%s" % (sb))))
-    return "".join(s)
+    # Original used crayons for color, e.g. str(crayons.yellow(f"{sa}"))
+    return f"{sa}{sep}{sb}"
 
 
 class LDViewRender:
     """LDView render session helper class."""
 
-    PARAMS = {
+    # Class attributes with type hints for clarity
+    dpi: int
+    page_width: float
+    page_height: float
+    auto_crop: bool
+    image_smooth: bool
+    no_lines: bool
+    wireframe: bool
+    quality_lighting: bool
+    flat_shading: bool
+    specular: bool
+    line_thickness: int
+    texmaps: bool
+    scale: float
+    output_path: str | None
+    log_output: bool
+    log_level: int
+    overwrite: bool
+
+    # Instance attributes that will be initialized
+    ldr_temp_path: str
+    pix_width: int
+    pix_height: int
+    args_size: str
+    cam_dist: int
+    args_cam: str
+    settings_snapshot: dict | None
+
+    PARAMS = {  # Kept for apply_params compatibility
         "dpi": 300,
         "page_width": 8.5,
         "page_height": 11.0,
@@ -112,32 +157,34 @@ class LDViewRender:
     }
 
     def __init__(self, **kwargs):
-        self.ldr_temp_path = tempfile.gettempdir() + os.sep + "temp.ldr"
-        apply_params(self, kwargs)
+        # Initialize attributes with defaults from PARAMS or type defaults
+        for param, default_value in self.PARAMS.items():
+            setattr(self, param, default_value)
+
+        self.ldr_temp_path = os.path.join(
+            tempfile.gettempdir(), "ldrawpy_temp.ldr"
+        )  # Unique temp file name
+        apply_params(self, kwargs)  # Overrides defaults with kwargs
+
         self.set_page_size(self.page_width, self.page_height)
         self.set_scale(self.scale)
         self.settings_snapshot = None
 
-    def __str__(self):
+    def __str__(self) -> str:
         s = []
         s.append("LDViewRender: ")
-        s.append(" DPI: %d  Scale: %.2f" % (self.dpi, self.scale))
+        s.append(f" DPI: {self.dpi}  Scale: {self.scale:.2f}")
         s.append(
-            " Page size: %s in (%s pixels)"
-            % (
-                _coord_str(self.page_width, self.page_height, " x "),
-                _coord_str(self.pix_width, self.pix_height, " x "),
-            )
+            f" Page size: {_coord_str(self.page_width, self.page_height, ' x ')} in "
+            f"({_coord_str(self.pix_width, self.pix_height, ' x ')}) pixels"
         )
-        s.append(
-            " Auto crop: %s  Image smooth: %s" % (self.auto_crop, self.image_smooth)
-        )
-        s.append(" Camera distance: %d" % (self.cam_dist))
+        s.append(f" Auto crop: {self.auto_crop}  Image smooth: {self.image_smooth}")
+        s.append(f" Camera distance: {self.cam_dist}")
         return "\n".join(s)
 
     def snapshot_settings(self):
         self.settings_snapshot = {}
-        for key in [
+        keys_to_snapshot = [
             "page_width",
             "page_height",
             "auto_crop",
@@ -152,13 +199,17 @@ class LDViewRender:
             "texmaps",
             "flat_shading",
             "specular",
-        ]:
-            self.settings_snapshot[key] = self.__dict__[key]
+            "line_thickness",
+            "dpi",  # Added missing ones
+        ]
+        for key in keys_to_snapshot:
+            if hasattr(self, key):
+                self.settings_snapshot[key] = getattr(self, key)
 
     def restore_settings(self):
         if self.settings_snapshot is None:
             return
-        for key in [
+        keys_to_restore = [
             "page_width",
             "page_height",
             "auto_crop",
@@ -173,146 +224,254 @@ class LDViewRender:
             "texmaps",
             "flat_shading",
             "specular",
-        ]:
-            self.__dict__[key] = self.settings_snapshot[key]
+            "line_thickness",
+            "dpi",  # Added missing ones
+        ]
+        for key in keys_to_restore:
+            if key in self.settings_snapshot:
+                setattr(self, key, self.settings_snapshot[key])
+        # After restoring, re-calculate dependent attributes
+        self.set_page_size(self.page_width, self.page_height)
+        self.set_scale(self.scale)
 
-    def set_page_size(self, width, height):
+    def set_page_size(self, width: float, height: float):
         self.page_width = width
         self.page_height = height
-        self.pix_width = self.page_width * self.dpi
-        self.pix_height = self.page_height * self.dpi
-        self.args_size = "-SaveWidth=%d -SaveHeight=%d" % (
-            self.pix_width,
-            self.pix_height,
-        )
+        self.pix_width = int(self.page_width * self.dpi)
+        self.pix_height = int(self.page_height * self.dpi)
+        self.args_size = f"-SaveWidth={self.pix_width} -SaveHeight={self.pix_height}"
 
-    def set_dpi(self, dpi):
+    def set_dpi(self, dpi: int):
         self.dpi = dpi
-        self.set_page_size(width=self.page_width, height=self.page_height)
-        self.set_scale(scale=self.scale)
+        self.set_page_size(
+            width=self.page_width, height=self.page_height
+        )  # Recalculate pixel sizes
+        self.set_scale(scale=self.scale)  # Recalculate camera distance
 
-    def set_scale(self, scale):
+    def set_scale(self, scale: float):
         self.scale = scale
         self.cam_dist = int(camera_distance(self.scale, self.dpi, self.page_width))
-        self.args_cam = "-ca0.01 -cg0.0,0.0,%d" % (self.cam_dist)
+        self.args_cam = f"-ca0.01 -cg0.0,0.0,{self.cam_dist}"
 
-    def _logoutput(self, msg, tstart=None, level=2):
-        logmsg(msg, level=level, prefix="LDR", log_level=self.log_level)
+    def _logoutput(self, msg: str, tstart: datetime.datetime = None, level: int = 2):
+        logmsg(msg, tstart=tstart, level=level, prefix="LDR", log_level=self.log_level)
 
-    def render_from_str(self, ldrstr, outfile):
+    def render_from_str(self, ldrstr: str, outfile: str):
         """Render from a LDraw text string."""
         if self.log_output:
-            s = ldrstr.splitlines()[0]
-            self._logoutput(
-                "rendering string (%s)..." % (crayons.green(s[: min(len(s), 80)]))
-            )
-        with open(self.ldr_temp_path, "w") as f:
-            f.write(ldrstr)
-        self.render_from_file(self.ldr_temp_path, outfile)
+            s = ldrstr.splitlines()[0] if ldrstr.splitlines() else ""
+            # Assuming colour_path_str and crayons are handled if this colored output is desired
+            self._logoutput(f"rendering string ({s[:min(len(s), 80)]})...")
+        try:
+            with open(self.ldr_temp_path, "w", encoding="utf-8") as f:
+                f.write(ldrstr)
+            self.render_from_file(self.ldr_temp_path, outfile)
+        except IOError as e:
+            self._logoutput(f"Error writing temporary LDR file: {e}", level=0)
 
-    def render_from_parts(self, parts, outfile):
+    def render_from_parts(
+        self, parts: list, outfile: str
+    ):  # Assuming parts is list of LDRPart-like objects
         """Render using a list of LDRPart objects."""
         if self.log_output:
-            self._logoutput("rendering parts (%s)..." % (crayons.green(len(parts))))
-        ldrstr = []
-        for p in parts:
-            ldrstr.append(str(p))
-        ldrstr = "".join(ldrstr)
+            self._logoutput(f"rendering parts ({len(parts)})...")
+        ldrstr_list = [str(p) for p in parts]
+        ldrstr = "".join(ldrstr_list)
         self.render_from_str(ldrstr, outfile)
 
-    def render_from_file(self, ldrfile, outfile):
+    def render_from_file(self, ldrfile: str, outfile: str):
         """Render from an LDraw file."""
-        tstart = datetime.datetime.now()
+        t_start_render = datetime.datetime.now()
+
+        filename_to_render = outfile
         if self.output_path is not None:
-            path, name = split_path(outfile)
-            oppath = full_path(self.output_path)
-            if not oppath in path:
-                filename = os.path.normpath(self.output_path + os.sep + outfile)
-            else:
-                filename = outfile
+            # Ensure output_path exists
+            os.makedirs(self.output_path, exist_ok=True)
+
+            # Check if outfile is an absolute path or already includes output_path
+            if not os.path.isabs(outfile) and not outfile.startswith(self.output_path):
+                filename_to_render = os.path.join(
+                    self.output_path, os.path.basename(outfile)
+                )
+            # else: outfile is absolute or already correctly prefixed
         else:
-            filename = full_path(outfile)
-        _, fno = split_path(filename)
-        if not self.overwrite and os.path.isfile(full_path(filename)):
+            filename_to_render = full_path(outfile)  # Resolves to absolute path
+
+        # Ensure the directory for the output file exists
+        output_dir = os.path.dirname(filename_to_render)
+        if output_dir:  # Create if not root directory
+            os.makedirs(output_dir, exist_ok=True)
+
+        if not self.overwrite and os.path.isfile(filename_to_render):
             if self.log_output:
-                _, fno = split_path(filename)
-                fno = colour_path_str(fno)
-                self._logoutput("rendered file %s already exists, skipping" % fno)
+                fno_display = colour_path_str(os.path.basename(filename_to_render))
+                self._logoutput(f"rendered file {fno_display} already exists, skipping")
             return
-        ldv = []
-        ldv.append(LDVIEW_BIN)
-        ldv.append("-SaveSnapShot=%s" % filename)
-        ldv.append(self.args_size)
-        ldv.append(self.args_cam)
-        for key, value in LDVIEW_DICT.items():
-            if key == "EdgeThickness":
-                value = self.line_thickness
-            elif key == "UseQualityLighting":
-                value = 1 if self.quality_lighting else 0
-            elif key == "Texmaps":
-                value = 1 if self.texmaps else 0
-            elif key == "UseFlatShading":
-                value = 1 if self.flat_shading else 0
-            elif key == "UseSpecular":
-                value = 1 if self.specular else 0
-            if self.no_lines:
-                if key == "EdgeThickness":
-                    value = 0
-                elif key == "ShowHighlightLines":
-                    value = 0
-                elif key == "ConditionalHighlights":
-                    value = 0
-                elif key == "UseQualityStuds":
-                    value = 0
-            if self.wireframe:
-                if key == "EdgesOnly":
-                    value = 1
-            ldv.append("-%s=%s" % (key, value))
-        ldv.append(ldrfile)
-        s = " ".join(ldv)
-        args = shlex.split(s)
-        subprocess.Popen(args).wait()
-        if self.log_output:
-            _, fni = split_path(ldrfile)
-            _, fno = split_path(filename)
-            fni = colour_path_str(fni)
-            fno = colour_path_str(fno)
-            self._logoutput("rendered file %s to %s..." % (fni, fno), tstart, level=0)
 
-        if self.auto_crop:
-            self.crop(filename)
-        if self.image_smooth:
-            self.smooth(filename)
+        ldv_command_parts = []
+        ldv_command_parts.append(LDVIEW_BIN)
+        ldv_command_parts.append(f"-SaveSnapShot={filename_to_render}")
+        ldv_command_parts.append(self.args_size)
+        ldv_command_parts.append(self.args_cam)
 
-    def crop(self, filename):
-        """Crop image file."""
-        tstart = datetime.datetime.now()
-        im = Image.open(filename)
-        bg = Image.new(im.mode, im.size, im.getpixel((1, 1)))
-        diff = ImageChops.difference(im, bg)
-        diff = ImageChops.add(diff, diff, 2.0, 0)
-        bbox = diff.getbbox()
-        if bbox:
-            im2 = im.crop(bbox)
-        else:
-            im2 = im
-        im2.save(filename)
-        if self.log_output:
-            _, fn = split_path(filename)
-            fn = colour_path_str(fn)
+        current_ldview_settings = LDVIEW_DICT.copy()
+        current_ldview_settings["EdgeThickness"] = self.line_thickness
+        current_ldview_settings["UseQualityLighting"] = (
+            1 if self.quality_lighting else 0
+        )
+        current_ldview_settings["Texmaps"] = 1 if self.texmaps else 0
+        current_ldview_settings["UseFlatShading"] = 1 if self.flat_shading else 0
+        current_ldview_settings["UseSpecular"] = 1 if self.specular else 0
+
+        if self.no_lines:
+            current_ldview_settings["EdgeThickness"] = 0
+            current_ldview_settings["ShowHighlightLines"] = 0
+            current_ldview_settings["ConditionalHighlights"] = 0
+            current_ldview_settings["UseQualityStuds"] = (
+                0  # Also often disabled with no_lines
+            )
+        if self.wireframe:
+            current_ldview_settings["EdgesOnly"] = 1
+
+        for key, value in current_ldview_settings.items():
+            ldv_command_parts.append(f"-{key}={value}")
+
+        ldv_command_parts.append(ldrfile)
+
+        try:
+            # Using Popen and wait as before. For more control, subprocess.run is an option.
+            process = subprocess.Popen(
+                ldv_command_parts, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            stdout, stderr = process.communicate()  # Wait and get output
+            if process.returncode != 0:
+                self._logoutput(
+                    f"LDView process error for {ldrfile}. Return code: {process.returncode}",
+                    level=0,
+                )
+                if stdout:
+                    self._logoutput(
+                        f"LDView STDOUT: {stdout.decode(errors='ignore')}", level=0
+                    )
+                if stderr:
+                    self._logoutput(
+                        f"LDView STDERR: {stderr.decode(errors='ignore')}", level=0
+                    )
+                return
+        except FileNotFoundError:
             self._logoutput(
-                "> cropped %s from (%s) to (%s)"
-                % (fn, _coord_str(im.size), _coord_str(im2.size)),
-                tstart,
+                f"Error: LDView executable not found at {LDVIEW_BIN}", level=0
+            )
+            return
+        except Exception as e:
+            self._logoutput(f"Error running LDView for {ldrfile}: {e}", level=0)
+            return
+
+        if self.log_output:
+            fni_display = colour_path_str(os.path.basename(ldrfile))
+            fno_display = colour_path_str(os.path.basename(filename_to_render))
+            self._logoutput(
+                f"rendered file {fni_display} to {fno_display}...",
+                t_start_render,
+                level=0,
             )
 
-    def smooth(self, filename):
+        if os.path.isfile(filename_to_render):
+            if self.auto_crop:
+                self.crop(filename_to_render)
+            if self.image_smooth:
+                self.smooth(filename_to_render)
+        else:
+            self._logoutput(
+                f"Warning: Output file {filename_to_render} not created by LDView.",
+                level=1,
+            )
+
+    def crop(self, filename: str):
+        """Crop image file."""
+        t_start_crop = datetime.datetime.now()
+        try:
+            im = Image.open(filename)
+            original_mode = im.mode
+            if im.mode != "RGBA":
+                im = im.convert("RGBA")
+
+            alpha = im.getchannel("A")
+            bbox = alpha.getbbox()  # Bounding box of non-zero alpha
+
+            if not bbox:  # If image is fully transparent or alpha channel is unhelpful
+                # Fallback to old method: difference from a background color
+                # Use a corner pixel that is likely background. (0,0) is common.
+                # Ensure image is not paletted for getpixel if it might be.
+                temp_im_for_bg = im
+                if temp_im_for_bg.mode == "P":  # Paletted
+                    temp_im_for_bg = temp_im_for_bg.convert(
+                        "RGBA"
+                    )  # Convert to get actual pixel
+
+                # Try to pick a background color that's not part of the object
+                # For LDraw, white or transparent is common. If alpha exists, transparent is best.
+                # If no alpha, and top-left is part of object, this might fail.
+                # A more robust method would be flood fill from corners or use a known bg color.
+                # For now, using the original logic's fallback path with slight adjustment.
+                bg_color_ref = temp_im_for_bg.getpixel(
+                    (0, 0)
+                )  # Get pixel from potentially converted image
+
+                bg = Image.new(
+                    im.mode, im.size, bg_color_ref
+                )  # Use determined bg color
+                diff = ImageChops.difference(im, bg)
+
+                # To make the difference more pronounced for getbbox, especially if diff is subtle
+                # Convert to grayscale and threshold can also work.
+                # Original: diff = ImageChops.add(diff, diff, 2.0, 0)
+                # Alternative: enhance contrast or convert to L and threshold
+                # For now, let's try to make it more robust for transparent images
+                if original_mode in (
+                    "LA",
+                    "RGBA",
+                ):  # If original had alpha, use that for diff
+                    diff_alpha = diff.getchannel("A")
+                    bbox_diff = diff_alpha.getbbox()
+                    if not bbox_diff:  # If alpha diff is also empty, try intensity diff
+                        bbox_diff = diff.convert(
+                            "L"
+                        ).getbbox()  # Convert to L for intensity bbox
+                    bbox = bbox_diff
+                else:  # No alpha, rely on color difference
+                    bbox = diff.getbbox()
+
+            if bbox:
+                im2 = im.crop(bbox)
+            else:
+                im2 = im  # No valid bbox found, use original image
+
+            im2.save(filename)
+            if self.log_output:
+                fn_display = colour_path_str(os.path.basename(filename))
+                self._logoutput(
+                    f"> cropped {fn_display} from ({_coord_str(im.size)}) to ({_coord_str(im2.size)})",
+                    t_start_crop,
+                )
+        except FileNotFoundError:
+            self._logoutput(f"Error cropping: File not found {filename}", level=0)
+        except Exception as e:
+            self._logoutput(f"Error during image crop for {filename}: {e}", level=0)
+
+    def smooth(self, filename: str):
         """Apply a smoothing filter to image file."""
-        tstart = datetime.datetime.now()
-        im = Image.open(filename)
-        im = im.filter(ImageFilter.SMOOTH)
-        im.save(filename)
-        if self.log_output:
-            _, fn = split_path(filename)
-            fn = colour_path_str(fn)
-            self._logoutput("> smoothed %s (%s)" % (fn, _coord_str(im.size)), tstart)
+        t_start_smooth = datetime.datetime.now()
+        try:
+            im = Image.open(filename)
+            im_smooth = im.filter(ImageFilter.SMOOTH)
+            im_smooth.save(filename)
+            if self.log_output:
+                fn_display = colour_path_str(os.path.basename(filename))
+                self._logoutput(
+                    f"> smoothed {fn_display} ({_coord_str(im.size)})", t_start_smooth
+                )
+        except FileNotFoundError:
+            self._logoutput(f"Error smoothing: File not found {filename}", level=0)
+        except Exception as e:
+            self._logoutput(f"Error during image smooth for {filename}: {e}", level=0)
