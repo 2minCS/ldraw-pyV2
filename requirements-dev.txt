@@ -7,4 +7,5 @@ black
 mypy
 numpy
 opencv-python
+nltk
 # coverage # Optional: for code coverage later
