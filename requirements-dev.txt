@@ -6,5 +6,5 @@ flake8
 black
 mypy
 numpy
-cv2
+opencv-python
 # coverage # Optional: for code coverage later
