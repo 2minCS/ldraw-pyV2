@@ -72,13 +72,31 @@ def test_dict_lookup():
     colours_rgb_tuples = FillColoursFromLDRCode(
         LDR_BLKWHT_COLOUR
     )  # Returns list of (r,g,b) tuples
-    # Expected RGB for Black (0,0,0) and White (1,1,1)
+
+    # Expected RGB for Black (hex "05131D") and White (hex "FFFFFF")
+    # R: 5/255, G: 19/255, B: 29/255
+    expected_black_rgb = (
+        5 / 255.0,  # Corrected R value for "05131D"
+        19 / 255.0,
+        29 / 255.0,
+    )
+    expected_white_rgb = (1.0, 1.0, 1.0)
+
+    # Use pytest.approx for float tuple comparison to handle potential precision issues
+    found_black = False
+    found_white = False
+    for tpl in colours_rgb_tuples:
+        if tpl == pytest.approx(expected_black_rgb, abs=1e-7):
+            found_black = True
+        if tpl == pytest.approx(expected_white_rgb, abs=1e-7):
+            found_white = True
+
     assert (
-        0.050980392156862744,
-        0.07450980392156863,
-        0.11372549019607843,
-    ) in colours_rgb_tuples  # Approx Black (05131D)
-    assert (1.0, 1.0, 1.0) in colours_rgb_tuples  # White
+        found_black
+    ), f"Expected Black RGB {expected_black_rgb} not found in {colours_rgb_tuples}"
+    assert (
+        found_white
+    ), f"Expected White RGB {expected_white_rgb} not found in {colours_rgb_tuples}"
     assert len(colours_rgb_tuples) == 2
 
     titles = FillTitlesFromLDRCode(LDR_BLKWHT_COLOUR)
@@ -89,8 +107,9 @@ def test_dict_lookup():
     # Test with a direct LDR code that has an RGB value
     colours_single_rgb = FillColoursFromLDRCode(14)  # Yellow
     yellow_rgb_from_dict = LDRColour.RGBFromHex(LDRColour.SafeLDRColourRGB(14))
-    assert yellow_rgb_from_dict in colours_single_rgb
+
     assert len(colours_single_rgb) == 1
+    assert colours_single_rgb[0] == pytest.approx(yellow_rgb_from_dict, abs=1e-7)
 
     titles_single = FillTitlesFromLDRCode(14)  # Yellow
     assert "Yellow" in titles_single
