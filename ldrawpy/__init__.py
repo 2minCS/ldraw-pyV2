@@ -134,7 +134,7 @@ from .ldvrender import LDViewRender, camera_distance
 from .ldrarrows import (
     ArrowContext,
     arrows_for_step,
-    remove_offset_parts as remove_arrow_offset_parts,  # CORRECTED: Import original name and alias it
+    remove_offset_parts as remove_arrow_offset_parts,
     ARROW_PREFIX,
     ARROW_PLI,
     ARROW_SUFFIX,
@@ -146,7 +146,7 @@ from .ldrarrows import (
     ARROW_PX,
     ARROW_MY,
     ARROW_PY,
-    arrow_value_after_token,
+    value_after_token as arrow_value_after_token,  # CORRECTED: Import original name and alias it
     norm_angle_arrow,
     vectorize_arrow,
 )
@@ -241,7 +241,7 @@ __all__ = [
     # ldrarrows
     "ArrowContext",
     "arrows_for_step",
-    "remove_arrow_offset_parts",  # This now refers to the aliased name
+    "remove_arrow_offset_parts",
     "ARROW_PARTS",
     "ARROW_PREFIX",
     "ARROW_PLI",
@@ -253,7 +253,7 @@ __all__ = [
     "ARROW_PX",
     "ARROW_MY",
     "ARROW_PY",
-    "arrow_value_after_token",
+    "arrow_value_after_token",  # This now refers to the aliased name
     "norm_angle_arrow",
     "vectorize_arrow",
     # ldrpprint
