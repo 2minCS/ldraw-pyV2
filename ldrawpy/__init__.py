@@ -120,7 +120,6 @@ from .ldrmodel import (
     key_colour,
     get_sha1_hash,
     sort_parts,
-    # Correctly import original names and alias them
     START_TOKENS as MODEL_START_TOKENS,
     END_TOKENS as MODEL_END_TOKENS,
     EXCEPTION_LIST as MODEL_EXCEPTION_LIST,
@@ -135,7 +134,7 @@ from .ldvrender import LDViewRender, camera_distance
 from .ldrarrows import (
     ArrowContext,
     arrows_for_step,
-    remove_arrow_offset_parts,
+    remove_offset_parts as remove_arrow_offset_parts,  # CORRECTED: Import original name and alias it
     ARROW_PREFIX,
     ARROW_PLI,
     ARROW_SUFFIX,
@@ -175,13 +174,13 @@ __all__ = [
     # Constants
     "LDR_DEF_COLOUR",
     "LDR_OPT_COLOUR",
-    "SPECIAL_TOKENS",  # Add more as needed
+    "SPECIAL_TOKENS",
     # ldrcolour & ldrcolourdict
     "LDRColour",
     "LDR_COLOUR_NAME",
     "LDR_COLOUR_RGB",
     "FillColoursFromLDRCode",
-    "FillTitlesFromLDRCode",  # Now correctly sourced
+    "FillTitlesFromLDRCode",
     "BL_TO_LDR_COLOUR",
     "LDR_COLOUR_TITLE",
     "LDR_FILL_CODES",
@@ -224,7 +223,7 @@ __all__ = [
     "get_parts_from_model",
     "sort_parts",
     "get_sha1_hash",
-    "MODEL_COMMON_SUBSTITUTIONS",  # This refers to the aliased name
+    "MODEL_COMMON_SUBSTITUTIONS",
     "line_has_all_tokens",
     "parse_special_tokens",
     "get_meta_commands",
@@ -235,14 +234,14 @@ __all__ = [
     "MODEL_START_TOKENS",
     "MODEL_END_TOKENS",
     "MODEL_EXCEPTION_LIST",
-    "MODEL_IGNORE_LIST",  # These refer to aliased names
+    "MODEL_IGNORE_LIST",
     # ldvrender
     "LDViewRender",
     "camera_distance",
     # ldrarrows
     "ArrowContext",
     "arrows_for_step",
-    "remove_arrow_offset_parts",
+    "remove_arrow_offset_parts",  # This now refers to the aliased name
     "ARROW_PARTS",
     "ARROW_PREFIX",
     "ARROW_PLI",
