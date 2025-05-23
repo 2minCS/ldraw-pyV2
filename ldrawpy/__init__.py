@@ -55,12 +55,8 @@ from .constants import (
 )
 
 # From .ldrcolour and .ldrcolourdict
-from .ldrcolour import (  # Import LDRColour and the functions from here
-    LDRColour,
-    FillColoursFromLDRCode,  # Moved from ldrcolourdict
-    FillTitlesFromLDRCode,  # Moved from ldrcolourdict
-)
-from .ldrcolourdict import (  # ldrcolourdict only contains dictionaries
+from .ldrcolour import LDRColour, FillColoursFromLDRCode, FillTitlesFromLDRCode
+from .ldrcolourdict import (
     BL_TO_LDR_COLOUR,
     LDR_COLOUR_NAME,
     LDR_COLOUR_RGB,
@@ -124,11 +120,12 @@ from .ldrmodel import (
     key_colour,
     get_sha1_hash,
     sort_parts,
-    MODEL_START_TOKENS,
-    MODEL_END_TOKENS,
-    MODEL_EXCEPTION_LIST,
-    MODEL_IGNORE_LIST,
-    MODEL_COMMON_SUBSTITUTIONS,
+    # Correctly import original names and alias them
+    START_TOKENS as MODEL_START_TOKENS,
+    END_TOKENS as MODEL_END_TOKENS,
+    EXCEPTION_LIST as MODEL_EXCEPTION_LIST,
+    IGNORE_LIST as MODEL_IGNORE_LIST,
+    COMMON_SUBSTITUTIONS as MODEL_COMMON_SUBSTITUTIONS,
 )
 
 # From .ldvrender
@@ -227,7 +224,7 @@ __all__ = [
     "get_parts_from_model",
     "sort_parts",
     "get_sha1_hash",
-    "MODEL_COMMON_SUBSTITUTIONS",
+    "MODEL_COMMON_SUBSTITUTIONS",  # This refers to the aliased name
     "line_has_all_tokens",
     "parse_special_tokens",
     "get_meta_commands",
@@ -238,7 +235,7 @@ __all__ = [
     "MODEL_START_TOKENS",
     "MODEL_END_TOKENS",
     "MODEL_EXCEPTION_LIST",
-    "MODEL_IGNORE_LIST",
+    "MODEL_IGNORE_LIST",  # These refer to aliased names
     # ldvrender
     "LDViewRender",
     "camera_distance",
