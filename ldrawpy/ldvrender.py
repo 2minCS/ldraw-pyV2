@@ -25,17 +25,12 @@
 
 import os
 import tempfile
-import datetime  # Keep this import
+import datetime
 import subprocess
 import shlex
 from collections import defaultdict
-from PIL import (
-    Image,
-    ImageOps,
-    ImageChops,
-    ImageFilter,
-)  # ImageFile is not typically directly used for type hints
-from typing import Optional, List, Tuple, Any, Dict  # For Optional type hint
+from PIL import Image, ImageOps, ImageChops, ImageFilter
+from typing import Optional, List, Tuple, Any, Dict, Union  # ADDED Union here
 
 # Explicit imports from toolbox
 from toolbox import (
@@ -97,7 +92,7 @@ def _coord_str(
         a, b = float(x[0]), float(x[1])
     elif isinstance(x, (int, float)) and isinstance(y, (int, float)):
         a, b = float(x), float(y)
-    else:  # Fallback or raise error for invalid input
+    else:
         return "coord_error"
     sa = ("%f" % (a)).rstrip("0").rstrip(".")
     sb = ("%f" % (b)).rstrip("0").rstrip(".")
@@ -241,7 +236,7 @@ class LDViewRender:
 
     def _logoutput(
         self, msg: str, tstart: Optional[datetime.datetime] = None, level: int = 2
-    ):  # FIXED tstart type
+    ):
         logmsg(msg, tstart=tstart, level=level, prefix="LDR", log_level=self.log_level)
 
     def render_from_str(self, ldrstr: str, outfile: str):
@@ -255,9 +250,7 @@ class LDViewRender:
         except IOError as e:
             self._logoutput(f"Error writing temporary LDR file: {e}", level=0)
 
-    def render_from_parts(
-        self, parts: List[Any], outfile: str
-    ):  # Assuming parts have __str__
+    def render_from_parts(self, parts: List[Any], outfile: str):
         if self.log_output:
             self._logoutput(f"rendering parts ({len(parts)})...")
         self.render_from_str("".join([str(p) for p in parts]), outfile)
@@ -359,7 +352,7 @@ class LDViewRender:
     def crop(self, filename: str):
         t_start_crop = datetime.datetime.now()
         try:
-            im: Image.Image = Image.open(filename)  # FIXED type hint
+            im: Image.Image = Image.open(filename)
             original_mode = im.mode
             if im.mode != "RGBA":
                 im = im.convert("RGBA")
@@ -395,7 +388,7 @@ class LDViewRender:
     def smooth(self, filename: str):
         t_start_smooth = datetime.datetime.now()
         try:
-            im: Image.Image = Image.open(filename)  # FIXED type hint
+            im: Image.Image = Image.open(filename)
             im_smooth = im.filter(ImageFilter.SMOOTH)
             im_smooth.save(filename)
             if self.log_output:
