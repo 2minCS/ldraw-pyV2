@@ -261,7 +261,7 @@ def arrows_for_step(
                     while idx + 2 < len(coord_tokens):
                         v = vectorize_arrow(coord_tokens[idx : idx + 3])
                         if v:
-                            current_block_offsets.append(v)  # FIXED
+                            current_block_offsets.append(v)
                         idx += 3
                     arrow_ctx.offset = current_block_offsets
                     current_block_arrow_colour = value_after_token(
@@ -279,9 +279,7 @@ def arrows_for_step(
                     arrow_ctx.colour = current_block_arrow_colour
                     arrow_ctx.length = current_block_arrow_length
                 elif "END" in tokens and in_arrow_meta_block:
-                    in_arrow_meta_block = (
-                        False  # Corrected: iamb to in_arrow_meta_block
-                    )
+                    in_arrow_meta_block = False
                 elif not in_arrow_meta_block:
                     arrow_ctx.colour = value_after_token(
                         tokens, "COLOUR", arrow_ctx.colour, int
@@ -390,23 +388,26 @@ def arrows_for_lpub_file(filename: str, outfile: str):
         for i, step_text in enumerate(steps_in_block):
             if i == 0 and not step_text.strip() and len(steps_in_block) > 1:
                 continue
-            processed_output = arrows_for_step(arrow_ctx, step_text, as_lpub=True)
-            # Ensure processed_output is a string for MyPy and runtime safety
+            processed_output_first_block = arrows_for_step(
+                arrow_ctx, step_text, as_lpub=True
+            )
             assert isinstance(
-                processed_output, str
-            ), f"arrows_for_step(as_lpub=True) expected str, got {type(processed_output)}"
-            processed_str: str = processed_output
+                processed_output_first_block, str
+            ), f"arrows_for_step(as_lpub=True) expected str, got {type(processed_output_first_block)}"
+            processed_str_fb: str = (
+                processed_output_first_block  # Use a unique name for this scope
+            )
 
-            prefix = (
+            prefix_fb = (
                 "0 STEP\n"
                 if i > 0
-                and processed_str.strip()
-                and not processed_str.strip().startswith(ARROW_PREFIX.strip())
-                and not processed_str.strip().startswith("0 STEP")
+                and processed_str_fb.strip()
+                and not processed_str_fb.strip().startswith(ARROW_PREFIX.strip())
+                and not processed_str_fb.strip().startswith("0 STEP")
                 else ""
             )
-            if processed_str.strip():
-                output_final_string_blocks.append(prefix + processed_str)
+            if processed_str_fb.strip():
+                output_final_string_blocks.append(prefix_fb + processed_str_fb)
 
     for i in range(start_block_idx, len(file_blocks)):
         block_text_with_maybe_header = file_blocks[i]
@@ -424,24 +425,27 @@ def arrows_for_lpub_file(filename: str, outfile: str):
         for j, step_text in enumerate(steps_content_in_block):
             if j == 0 and not step_text.strip() and len(steps_content_in_block) > 1:
                 continue
-            processed_output = arrows_for_step(arrow_ctx, step_text, as_lpub=True)
+            processed_output_sub_block = arrows_for_step(
+                arrow_ctx, step_text, as_lpub=True
+            )
             assert isinstance(
-                processed_output, str
-            ), f"arrows_for_step(as_lpub=True) expected str, got {type(processed_output)}"
-            processed_str: str = processed_output
+                processed_output_sub_block, str
+            ), f"arrows_for_step(as_lpub=True) expected str, got {type(processed_output_sub_block)}"
+            processed_str_sub: str = (
+                processed_output_sub_block  # Use a unique name for this scope
+            )
 
-            prefix = (
+            prefix_sub = (
                 "0 STEP\n"
                 if j > 0
-                and processed_str.strip()
-                and not processed_str.strip().startswith(ARROW_PREFIX.strip())
-                and not processed_str.strip().startswith("0 STEP")
+                and processed_str_sub.strip()
+                and not processed_str_sub.strip().startswith(ARROW_PREFIX.strip())
+                and not processed_str_sub.strip().startswith("0 STEP")
                 else ""
             )
-            if processed_str.strip():
-                output_final_string_blocks.append(prefix + processed_str)
+            if processed_str_sub.strip():
+                output_final_string_blocks.append(prefix_sub + processed_str_sub)
 
-    # Ensure all elements in output_final_string_blocks are strings before join
     final_output_str = "\n".join(
         s.strip()
         for s in output_final_string_blocks
@@ -492,7 +496,7 @@ def remove_offset_parts(
         if isinstance(ags, str):
             tagp = LDRPart()
             if tagp.from_str(ags):
-                arrow_part_names.add(tagp.name)  # FIXED
+                arrow_part_names.add(tagp.name)
 
     kept_parts: List[LDRPart] = []
     for pc in pp_objs:
