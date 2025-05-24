@@ -27,7 +27,7 @@ import os
 import copy
 from math import sin, cos, pi
 from functools import reduce
-from typing import List, Tuple, Union, Optional, Any, Dict
+from typing import List, Tuple, Union, Optional, Any, Dict, Set  # IMPORTED Set
 
 from toolbox import Vector, Matrix, Identity, ZAxis, safe_vector
 from .ldrprimitives import LDRPart
@@ -322,7 +322,7 @@ def arrows_for_step(
         lpub_result_lines: List[str] = []
         if original_part_lines_from_arrow_blocks or arrow_data_collected:
             lpub_result_lines.append(ARROW_PREFIX)
-            ulp = set()
+            ulp: Set[str] = set()  # Corrected type hint
             for adi in arrow_data_collected:
                 if adi["line"] not in ulp:
                     po = LDRPart()
@@ -394,9 +394,7 @@ def arrows_for_lpub_file(filename: str, outfile: str):
             assert isinstance(
                 processed_output_first_block, str
             ), f"arrows_for_step(as_lpub=True) expected str, got {type(processed_output_first_block)}"
-            processed_str_fb: str = (
-                processed_output_first_block  # Use a unique name for this scope
-            )
+            processed_str_fb: str = processed_output_first_block
 
             prefix_fb = (
                 "0 STEP\n"
@@ -431,9 +429,7 @@ def arrows_for_lpub_file(filename: str, outfile: str):
             assert isinstance(
                 processed_output_sub_block, str
             ), f"arrows_for_step(as_lpub=True) expected str, got {type(processed_output_sub_block)}"
-            processed_str_sub: str = (
-                processed_output_sub_block  # Use a unique name for this scope
-            )
+            processed_str_sub: str = processed_output_sub_block
 
             prefix_sub = (
                 "0 STEP\n"
@@ -482,7 +478,7 @@ def remove_offset_parts(
         elif isinstance(item, str) and p_obj.from_str(item):
             op_objs.append(p_obj)
 
-    arrow_part_names: set[str] = set()
+    arrow_part_names: Set[str] = set()  # CORRECTED type hint
     arrow_offsets_world: List[Vector] = []
     for adi in arrow_dict_list:
         if not isinstance(adi, dict):
