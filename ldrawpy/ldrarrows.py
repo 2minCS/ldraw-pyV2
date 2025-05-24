@@ -100,7 +100,7 @@ class ArrowContext:
 
     def matrix_for_offset(
         self, ov: Vector, mask: str = "", inv: bool = False, tilt: float = 0.0
-    ) -> Matrix:  # Param is 'inv'
+    ) -> Matrix:
         ax, ay, az = abs(ov.x), abs(ov.y), abs(ov.z)
         base = Identity()
         if "x" not in mask and ax > max(ay, az, 1e-9):
@@ -125,7 +125,7 @@ class ArrowContext:
 
     def loc_for_offset(
         self, ov: Vector, l: int, mask: str = "", r: float = 0.5
-    ) -> Vector:  # Param is 'r'
+    ) -> Vector:
         lo = Vector(0, 0, 0)
         slx, sly, slz = (
             float(l) * r * self.scale,
@@ -184,18 +184,17 @@ class ArrowContext:
                 continue
             ap = LDRPart()
             ap.name = self.part_for_length(arrow_data_dict["length"])
-
             abo = self.loc_for_offset(
                 single_offset_vec,
                 arrow_data_dict["length"],
                 mask,
-                r=arrow_data_dict["ratio"],  # FIXED: Use 'r' instead of 'ratio'
+                r=arrow_data_dict["ratio"],
             )
             ap.attrib.loc = lpo.attrib.loc + abo
             ap.attrib.matrix = self.matrix_for_offset(
                 single_offset_vec,
                 mask,
-                inv=arrow_data_dict["invert"],  # FIXED: Use 'inv' instead of 'invert'
+                inv=arrow_data_dict["invert"],
                 tilt=arrow_data_dict["tilt"],
             )
             ap.attrib.colour = arrow_data_dict["colour"]
@@ -213,7 +212,7 @@ class ArrowContext:
             "invert": inv,
             "ratio": r,
             "tilt": t,
-        }  # 'ratio' is key in dict, 'r' is param for loc_for_offset
+        }
 
 
 def arrows_for_step(
@@ -222,27 +221,23 @@ def arrows_for_step(
     as_lpub: bool = True,
     only_arrows: bool = False,
     as_dict: bool = False,
-) -> Union[str, List[Dict[str, Any]]]:  # Return type
-
+) -> Union[str, List[Dict[str, Any]]]:
     processed_lines: List[str] = []
     arrow_data_collected: List[Dict[str, Any]] = []
     original_part_lines_from_arrow_blocks: List[str] = []
-
     in_arrow_meta_block = False
     current_block_offsets: List[Vector] = []
     current_block_arrow_colour = arrow_ctx.colour
     current_block_arrow_length = arrow_ctx.length
-    current_block_arrow_ratio = arrow_ctx.ratio  # Use context's default ratio
+    current_block_arrow_ratio = arrow_ctx.ratio
     current_block_arrow_tilt = 0.0
 
     for line_str in step_content.splitlines():
         stripped = line_str.lstrip()
         line_type = int(stripped[0]) if stripped and stripped[0].isdigit() else -1
-
         if line_type == 0:
             tokens = line_str.upper().split()
             is_py_arrow_cmd = "!PY" in tokens and "ARROW" in tokens
-
             if is_py_arrow_cmd:
                 if "BEGIN" in tokens:
                     in_arrow_meta_block = True
@@ -266,9 +261,7 @@ def arrows_for_step(
                     while idx + 2 < len(coord_tokens):
                         v = vectorize_arrow(coord_tokens[idx : idx + 3])
                         if v:
-                            current_block_offsets.append(
-                                v
-                            )  # FIXED: No assignment from append
+                            current_block_offsets.append(v)  # FIXED
                         idx += 3
                     arrow_ctx.offset = current_block_offsets
                     current_block_arrow_colour = value_after_token(
@@ -279,16 +272,16 @@ def arrows_for_step(
                     )
                     current_block_arrow_ratio = value_after_token(
                         tokens, "RATIO", arrow_ctx.ratio, float
-                    )  # Default to context if not found
+                    )
                     current_block_arrow_tilt = value_after_token(
                         tokens, "TILT", 0.0, float
                     )
-                    # Update context only if values were actually found on BEGIN line
-                    # This was slightly ambiguous in original, let's assume BEGIN overrides context for the block
                     arrow_ctx.colour = current_block_arrow_colour
                     arrow_ctx.length = current_block_arrow_length
                 elif "END" in tokens and in_arrow_meta_block:
-                    iamb = False
+                    in_arrow_meta_block = (
+                        False  # Corrected: iamb to in_arrow_meta_block
+                    )
                 elif not in_arrow_meta_block:
                     arrow_ctx.colour = value_after_token(
                         tokens, "COLOUR", arrow_ctx.colour, int
@@ -327,7 +320,6 @@ def arrows_for_step(
 
     if as_dict:
         return arrow_data_collected
-
     if as_lpub:
         lpub_result_lines: List[str] = []
         if original_part_lines_from_arrow_blocks or arrow_data_collected:
@@ -355,19 +347,14 @@ def arrows_for_step(
                 lpub_result_lines.append(pl_line.strip())
             lpub_result_lines.append(ARROW_PLI_SUFFIX)
             return "\n".join(lpub_result_lines) + "\n" if lpub_result_lines else ""
-        # If no arrow activity, return original non-arrow lines (already in processed_lines if any)
-        # Filter out any !PY ARROW commands if they were added to processed_lines
         final_processed_lines = [
             ln
             for ln in processed_lines
             if not ("!PY" in ln.upper() and "ARROW" in ln.upper())
         ]
         return "\n".join(final_processed_lines) + "\n" if final_processed_lines else ""
-
-    # Not as_lpub and not as_dict:
     final_non_lpub_lines: List[str] = []
     if not only_arrows:
-        # Filter out !PY ARROW commands from processed_lines if they were kept
         final_non_lpub_lines.extend(
             [
                 ln
@@ -375,12 +362,10 @@ def arrows_for_step(
                 if not ("!PY" in ln.upper() and "ARROW" in ln.upper())
             ]
         )
-
     for adi in arrow_data_collected:
         ags = arrow_ctx.arrow_from_dict(adi)
         if ags:
             final_non_lpub_lines.append(ags.strip())
-
     return "\n".join(final_non_lpub_lines) + "\n" if final_non_lpub_lines else ""
 
 
@@ -395,24 +380,22 @@ def arrows_for_lpub_file(filename: str, outfile: str):
 
     output_final_string_blocks: List[str] = []
     file_blocks = content.split("0 FILE")
-
     first_block_is_raw_model = not content.strip().startswith("0 FILE") and bool(
         file_blocks
     )
     start_block_idx = 1 if first_block_is_raw_model else 0
 
-    if first_block_is_raw_model and file_blocks:  # Ensure file_blocks is not empty
-        # Process file_blocks[0] as the first model content block
+    if first_block_is_raw_model and file_blocks:
         steps_in_block = file_blocks[0].split("0 STEP")
         for i, step_text in enumerate(steps_in_block):
             if i == 0 and not step_text.strip() and len(steps_in_block) > 1:
                 continue
-
             processed_output = arrows_for_step(arrow_ctx, step_text, as_lpub=True)
-            # Ensure processed_output is a string
-            processed_str = (
-                processed_output if isinstance(processed_output, str) else ""
-            )
+            # Ensure processed_output is a string for MyPy and runtime safety
+            assert isinstance(
+                processed_output, str
+            ), f"arrows_for_step(as_lpub=True) expected str, got {type(processed_output)}"
+            processed_str: str = processed_output
 
             prefix = (
                 "0 STEP\n"
@@ -422,38 +405,30 @@ def arrows_for_lpub_file(filename: str, outfile: str):
                 and not processed_str.strip().startswith("0 STEP")
                 else ""
             )
-
             if processed_str.strip():
                 output_final_string_blocks.append(prefix + processed_str)
 
-    # Process blocks starting with "0 FILE"
     for i in range(start_block_idx, len(file_blocks)):
         block_text_with_maybe_header = file_blocks[i]
         if not block_text_with_maybe_header.strip():
             continue
-
         current_file_block_str = block_text_with_maybe_header.strip()
-        if (
-            not current_file_block_str.startswith("0 FILE") and i >= 0
-        ):  # Check i >= 0 for safety
+        if not current_file_block_str.startswith("0 FILE") and i >= 0:
             current_file_block_str = "0 FILE " + current_file_block_str
-
         block_lines = current_file_block_str.splitlines()
         if not block_lines:
             continue
-
-        output_final_string_blocks.append(block_lines[0])  # Add "0 FILE <name>" line
+        output_final_string_blocks.append(block_lines[0])
         content_for_steps_parsing = "\n".join(block_lines[1:])
-
         steps_content_in_block = content_for_steps_parsing.split("0 STEP")
         for j, step_text in enumerate(steps_content_in_block):
             if j == 0 and not step_text.strip() and len(steps_content_in_block) > 1:
                 continue
-
             processed_output = arrows_for_step(arrow_ctx, step_text, as_lpub=True)
-            processed_str = (
-                processed_output if isinstance(processed_output, str) else ""
-            )
+            assert isinstance(
+                processed_output, str
+            ), f"arrows_for_step(as_lpub=True) expected str, got {type(processed_output)}"
+            processed_str: str = processed_output
 
             prefix = (
                 "0 STEP\n"
@@ -463,12 +438,14 @@ def arrows_for_lpub_file(filename: str, outfile: str):
                 and not processed_str.strip().startswith("0 STEP")
                 else ""
             )
-
             if processed_str.strip():
                 output_final_string_blocks.append(prefix + processed_str)
 
+    # Ensure all elements in output_final_string_blocks are strings before join
     final_output_str = "\n".join(
-        filter(None, [s.strip() for s in output_final_string_blocks])
+        s.strip()
+        for s in output_final_string_blocks
+        if isinstance(s, str) and s.strip()
     )
     if final_output_str and not final_output_str.endswith("\n"):
         final_output_str += "\n"
@@ -488,18 +465,18 @@ def remove_offset_parts(
 ) -> Union[List[LDRPart], List[str]]:
     pp_objs: List[LDRPart] = []
     for item in parts:
+        p_obj = LDRPart()
         if isinstance(item, LDRPart):
             pp_objs.append(item)
-        elif isinstance(item, str):
-            p_obj = LDRPart()
-            _ = p_obj.from_str(item) and pp_objs.append(p_obj)
+        elif isinstance(item, str) and p_obj.from_str(item):
+            pp_objs.append(p_obj)
     op_objs: List[LDRPart] = []
     for item in oparts:
+        p_obj = LDRPart()
         if isinstance(item, LDRPart):
             op_objs.append(item)
-        elif isinstance(item, str):
-            p_obj = LDRPart()
-            _ = p_obj.from_str(item) and op_objs.append(p_obj)
+        elif isinstance(item, str) and p_obj.from_str(item):
+            op_objs.append(p_obj)
 
     arrow_part_names: set[str] = set()
     arrow_offsets_world: List[Vector] = []
@@ -514,7 +491,8 @@ def remove_offset_parts(
         ags = adi.get("arrow")
         if isinstance(ags, str):
             tagp = LDRPart()
-            _ = tagp.from_str(ags) and arrow_part_names.add(tagp.name)
+            if tagp.from_str(ags):
+                arrow_part_names.add(tagp.name)  # FIXED
 
     kept_parts: List[LDRPart] = []
     for pc in pp_objs:
