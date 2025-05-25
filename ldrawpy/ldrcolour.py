@@ -27,14 +27,14 @@ import string
 from typing import Tuple, Union, List, Optional, Any  # For type hints
 
 # Explicit imports from within the ldrawpy package
-from .constants import LDR_DEF_COLOUR  # Import LDR_DEF_COLOUR
-from .ldrcolourdict import (  # Import necessary dictionaries
+from .constants import LDR_DEF_COLOUR
+from .ldrcolourdict import (
     LDR_COLOUR_RGB,
     LDR_COLOUR_NAME,
     LDR_COLOUR_TITLE,
     BL_TO_LDR_COLOUR,
-    LDR_FILL_CODES,  # Used by FillColoursFromLDRCode
-    LDR_FILL_TITLES,  # Used by FillTitlesFromLDRCode
+    LDR_FILL_CODES,
+    LDR_FILL_TITLES,
 )
 
 
@@ -55,14 +55,13 @@ class LDRColour(object):
             int, str, Tuple[float, ...], List[float], "LDRColour"
         ] = LDR_DEF_COLOUR,
     ):
-        self.code = LDR_DEF_COLOUR  # Default
+        self.code = LDR_DEF_COLOUR
         self.r = 0.8
         self.g = 0.8
         self.b = 0.8
 
         if isinstance(colour, (tuple, list)):
             if len(colour) == 3:
-                # Check if RGB values are 0-255 or 0.0-1.0
                 if any(c > 1.0 for c in colour if isinstance(c, (int, float))):  # type: ignore
                     self.r = min(float(colour[0]) / 255.0, 1.0)
                     self.g = min(float(colour[1]) / 255.0, 1.0)
@@ -71,49 +70,43 @@ class LDRColour(object):
                     self.r = float(colour[0])
                     self.g = float(colour[1])
                     self.b = float(colour[2])
-
-                # Try to find matching LDR code from RGB
                 rgb_hex_str = self.as_hex().lower()
                 found_code = LDR_DEF_COLOUR
                 for code_val, hex_val in LDR_COLOUR_RGB.items():
                     if rgb_hex_str == hex_val.lower():
                         found_code = code_val
                         break
-                self.code = found_code  # Assign found code or keep LDR_DEF_COLOUR
+                self.code = found_code
             else:
-                # Invalid tuple/list, retain default LDR_DEF_COLOUR and its RGB
-                self.code_to_rgb()  # Sets r,g,b for LDR_DEF_COLOUR
+                self.code_to_rgb()
 
         elif isinstance(colour, str):
-            # Try parsing as LDraw colour name or hex string
             parsed_code = LDRColour.ColourCodeFromString(colour)
-            if parsed_code != LDR_DEF_COLOUR:  # Found by name or hex in LDR_COLOUR_RGB
+            if parsed_code != LDR_DEF_COLOUR:
                 self.code = parsed_code
                 self.code_to_rgb()
-            elif colour.startswith("#") and (
-                len(colour) == 7 or len(colour) == 4
-            ):  # Check for hex string
+            elif colour.startswith("#") and (len(colour) == 7 or len(colour) == 4):
                 try:
                     r_val, g_val, b_val = LDRColour.RGBFromHex(colour)
                     self.r, self.g, self.b = r_val, g_val, b_val
-                    # self.code remains LDR_DEF_COLOUR as it's a custom hex
-                except ValueError:  # Invalid hex
-                    self.code_to_rgb()  # Default
-            else:  # Unknown string
-                self.code_to_rgb()  # Default
+                except ValueError:
+                    self.code_to_rgb()
+            else:
+                self.code_to_rgb()
 
-        elif isinstance(colour, LDRColour):  # If LDRColour instance is passed
+        elif isinstance(colour, LDRColour):
             self.code = colour.code
             self.r = colour.r
             self.g = colour.g
             self.b = colour.b
-        elif isinstance(colour, int):  # If integer (LDraw code)
+        elif isinstance(colour, int):
             self.code = colour
             self.code_to_rgb()
-        else:  # Fallback for other types
+        else:
             self.code_to_rgb()
 
     def __repr__(self) -> str:
+        # CONVERTED TO F-STRING
         return (
             f"{self.__class__.__name__}({self.code}, "
             f"r: {self.r:.2f} g: {self.g:.2f} b: {self.b:.2f}, #{self.as_hex()})"
@@ -126,10 +119,8 @@ class LDRColour(object):
         if isinstance(other, int):
             return self.code == other
         if isinstance(other, LDRColour):
-            # If both have non-default codes, compare codes
             if self.code != LDR_DEF_COLOUR and other.code != LDR_DEF_COLOUR:
                 return self.code == other.code
-            # Otherwise, compare RGB values (approximately)
             return (
                 abs(self.r - other.r) < 1e-6
                 and abs(self.g - other.g) < 1e-6
@@ -139,29 +130,23 @@ class LDRColour(object):
 
     def code_to_rgb(self):
         if self.code == LDR_DEF_COLOUR:
-            self.r, self.g, self.b = 0.62, 0.62, 0.62  # Default LDraw color RGB
+            self.r, self.g, self.b = 0.62, 0.62, 0.62
             return
 
         if self.code in LDR_COLOUR_RGB:
             rgb_hex = LDR_COLOUR_RGB[self.code]
             try:
                 self.r, self.g, self.b = LDRColour.RGBFromHex(rgb_hex)
-            except ValueError:  # Should not happen if LDR_COLOUR_RGB is well-formed
-                self.r, self.g, self.b = 0.8, 0.8, 0.8  # Fallback
+            except ValueError:
+                self.r, self.g, self.b = 0.8, 0.8, 0.8
         else:
-            # Code not in LDR_COLOUR_RGB, use default RGB or keep current if set by hex
-            # If self.r, self.g, self.b were already set (e.g. from custom hex), don't override
-            # This case implies self.code might be LDR_DEF_COLOUR but r,g,b are custom
-            # For safety, if code is unknown and not LDR_DEF_COLOUR, revert to default LDR_DEF_COLOUR's RGB
-            if (
-                self.r == 0.8 and self.g == 0.8 and self.b == 0.8
-            ):  # If still at initial defaults
+            if self.r == 0.8 and self.g == 0.8 and self.b == 0.8:
                 self.r, self.g, self.b = 0.62, 0.62, 0.62
 
     def as_tuple(self) -> Tuple[float, float, float]:
         return (self.r, self.g, self.b)
 
-    def as_bgr(self) -> Tuple[int, int, int]:  # For OpenCV etc.
+    def as_bgr(self) -> Tuple[int, int, int]:
         return (int(self.b * 255), int(self.g * 255), int(self.r * 255))
 
     def as_hex(self) -> str:
@@ -171,31 +156,21 @@ class LDRColour(object):
             f"{int(self.b * 255.0):02X}"
         )
 
-    def ldvcode(self) -> int:  # LDView compatible code
-        # LDView might not support all custom codes > 1000 that are not official direct/edge colors
-        # For now, assume all defined codes are usable or LDView handles them.
-        # Original logic: if self.code >= 1000: pc = LDR_DEF_COLOUR
-        # This might be too restrictive if codes like 1004 (LDR_BLKWHT_COLOUR) are used.
-        # LDraw spec allows codes up to 499 for solid, 511 for transparent.
-        # Codes for special purposes (like multi-color fills) are application-specific.
-        return self.code  # Return the actual code for now
+    def ldvcode(self) -> int:
+        return self.code
 
     def name(self) -> str:
         theName = LDRColour.SafeLDRColourName(self.code)
-        if not theName or theName == str(
-            LDR_DEF_COLOUR
-        ):  # If no name or default code name
-            # For custom RGB (where code might be LDR_DEF_COLOUR but RGB is specific)
+        if not theName or theName == str(LDR_DEF_COLOUR):
             if self.code == LDR_DEF_COLOUR and not (
                 self.r == 0.62 and self.g == 0.62 and self.b == 0.62
             ):
                 return f"#{self.as_hex()}"
-            elif not theName:  # Truly unknown code with no name
+            elif not theName:
                 return f"LDR Code {self.code}"
         return theName
 
     def high_contrast_complement(self) -> Tuple[float, float, float]:
-        # Calculate perceived luminance (simplified)
         luminance = 0.299 * self.r + 0.587 * self.g + 0.114 * self.b
         return (0.0, 0.0, 0.0) if luminance > 0.5 else (1.0, 1.0, 1.0)
 
@@ -203,21 +178,21 @@ class LDRColour(object):
         for bl_code, ldr_code in BL_TO_LDR_COLOUR.items():
             if ldr_code == self.code:
                 return bl_code
-        return 0  # Default if no mapping
+        return 0
 
     @staticmethod
     def SafeLDRColourName(ldrCode: int) -> str:
         if ldrCode in LDR_COLOUR_NAME:
             return LDR_COLOUR_NAME[ldrCode]
-        if ldrCode in LDR_COLOUR_TITLE:  # For special group codes
+        if ldrCode in LDR_COLOUR_TITLE:
             return LDR_COLOUR_TITLE[ldrCode]
-        return ""  # Return empty if no name found
+        return ""
 
     @staticmethod
-    def SafeLDRColourRGB(ldrCode: int) -> str:  # Returns hex string
+    def SafeLDRColourRGB(ldrCode: int) -> str:
         if ldrCode in LDR_COLOUR_RGB:
             return LDR_COLOUR_RGB[ldrCode]
-        return "CCCCCC"  # Default LDR_DEF_COLOUR hex (approx)
+        return "CCCCCC"
 
     @staticmethod
     def BLColourCodeFromLDR(ldr_code_val: int) -> int:
@@ -228,11 +203,9 @@ class LDRColour(object):
 
     @staticmethod
     def ColourCodeFromString(colourStr: str) -> int:
-        # Check by name (case-insensitive)
         for code, name_val in LDR_COLOUR_NAME.items():
             if name_val.lower() == colourStr.lower():
                 return code
-        # Check by hex string (e.g., "#RRGGBB" or "RRGGBB")
         norm_colour_str = colourStr.lstrip("#").lower()
         if len(norm_colour_str) == 6 and all(
             c in string.hexdigits for c in norm_colour_str
@@ -240,15 +213,14 @@ class LDRColour(object):
             for code, rgb_hex_val in LDR_COLOUR_RGB.items():
                 if norm_colour_str == rgb_hex_val.lower():
                     return code
-        return LDR_DEF_COLOUR  # Default if not found
+        return LDR_DEF_COLOUR
 
     @staticmethod
     def RGBFromHex(hexStr: str) -> Tuple[float, float, float]:
         hs = hexStr.lstrip("#")
         if not (len(hs) == 6 and all(c in string.hexdigits for c in hs)):
-            # Try 3-digit hex
             if len(hs) == 3 and all(c in string.hexdigits for c in hs):
-                hs = "".join([c * 2 for c in hs])  # Expand "RGB" to "RRGGBB"
+                hs = "".join([c * 2 for c in hs])
             else:
                 raise ValueError(f"Invalid hex string: {hexStr}")
 
@@ -258,27 +230,25 @@ class LDRColour(object):
         return (r_val, g_val, b_val)
 
 
-# These functions use constants from ldrcolourdict and LDRColour class methods
 def FillColoursFromLDRCode(ldrCode: int) -> List[Tuple[float, float, float]]:
     fill_colour_hex_list: List[str] = []
-    if ldrCode in LDR_COLOUR_RGB:  # Single official color
+    if ldrCode in LDR_COLOUR_RGB:
         fill_colour_hex_list.append(LDR_COLOUR_RGB[ldrCode])
-    elif ldrCode in LDR_FILL_CODES:  # Special fill group code
+    elif ldrCode in LDR_FILL_CODES:
         fill_colour_hex_list = LDR_FILL_CODES[ldrCode]
-
     rgb_tuples: List[Tuple[float, float, float]] = []
     for hex_val in fill_colour_hex_list:
         try:
             rgb_tuples.append(LDRColour.RGBFromHex(hex_val))
         except ValueError:
-            pass  # Skip invalid hex strings in definitions
+            pass
     return rgb_tuples
 
 
 def FillTitlesFromLDRCode(ldrCode: int) -> List[str]:
     fill_titles_list: List[str] = []
-    if ldrCode in LDR_COLOUR_NAME:  # Single official color
+    if ldrCode in LDR_COLOUR_NAME:
         fill_titles_list.append(LDR_COLOUR_NAME[ldrCode])
-    elif ldrCode in LDR_FILL_TITLES:  # Special fill group code
+    elif ldrCode in LDR_FILL_TITLES:
         fill_titles_list = LDR_FILL_TITLES[ldrCode]
     return fill_titles_list

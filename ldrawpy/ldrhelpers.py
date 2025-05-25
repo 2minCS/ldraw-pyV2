@@ -25,14 +25,7 @@
 
 import decimal
 from math import pi, cos, sin
-from typing import (
-    List,
-    Union,
-    Any,
-    TYPE_CHECKING,
-    Tuple,
-    Optional,
-)  # ADDED Tuple, Optional
+from typing import List, Union, Any, TYPE_CHECKING, Tuple, Optional
 
 # Explicit imports from toolbox
 from toolbox import (
@@ -42,12 +35,11 @@ from toolbox import (
 )  # Assuming these are used or were from wildcard
 
 # Explicit relative imports from ldrawpy package
-# ADDED LDRAW_TOKENS, META_TOKENS
 from .constants import LDR_OPT_COLOUR, ASPECT_DICT, FLIP_DICT, LDRAW_TOKENS, META_TOKENS
 
 # Forward declaration for LDRPart and LDRLine to avoid circular import
 if TYPE_CHECKING:
-    from .ldrprimitives import LDRPart, LDRAttrib, LDRLine  # ADDED LDRLine here
+    from .ldrprimitives import LDRPart, LDRAttrib, LDRLine
 
 
 def quantize(x: Union[str, float, decimal.Decimal]) -> float:
@@ -71,16 +63,27 @@ def LDU2MM(x: float) -> float:
 
 
 def val_units(value: float, units: str = "ldu") -> str:
+    """
+    Writes a floating point value in units of either mm or ldu.
+    It restricts the number of decimal places to 4 and minimizes
+    redundant trailing zeros (as recommended by ldraw.org)
+    """
     x = value * 2.5 if units == "mm" else value
     quantized_x = quantize(x)
+
+    # CONVERTED TO F-STRING for initial formatting
     s = f"{quantized_x:.4f}"
     s = s.rstrip("0").rstrip(".")
     if s == "-0":
         return "0 "
-    return s + " "
+    return f"{s} "  # Use f-string for final space addition
 
 
 def mat_str(m: Union[Tuple[float, ...], List[float]]) -> str:
+    """
+    Writes the values of a matrix (assumed to be a flat list/tuple of 9 elements)
+    formatted by val_units.
+    """
     if len(m) != 9:
         return "".join([val_units(float(v), "ldu") for v in m])
     return "".join([val_units(float(v), "ldu") for v in m])
@@ -97,7 +100,7 @@ def vector_str(p: Vector, attrib: "LDRAttrib") -> str:
 def GetCircleSegments(
     radius: float, segments: int, attrib: "LDRAttrib"
 ) -> List["LDRLine"]:
-    from .ldrprimitives import LDRLine  # Local import for LDRLine
+    from .ldrprimitives import LDRLine
 
     lines: List[LDRLine] = []
     if segments <= 0:
@@ -128,7 +131,7 @@ def ldrlist_from_parts(
     p_list: List[LDRPart] = []
     input_list: List[Union[str, "LDRPart"]]
     if isinstance(parts, str):
-        input_list = parts.splitlines()  # type: ignore # MyPy might complain if parts is LDRPart
+        input_list = parts.splitlines()  # type: ignore
     elif isinstance(parts, list):
         input_list = parts
     else:
@@ -270,7 +273,6 @@ def clean_line(line: str) -> str:
             is_potentially_numeric = False
         if "." in s_token and any(c.isalpha() for c in s_token):
             is_potentially_numeric = False
-        # Uses LDRAW_TOKENS and META_TOKENS from .constants
         if s_token.upper() in LDRAW_TOKENS or s_token.upper() in META_TOKENS:
             is_potentially_numeric = False
         if s_token.startswith("!"):
@@ -291,6 +293,7 @@ def clean_file(
 ) -> Union[None, List[str]]:
     output_filename = fno if fno is not None else fn.replace(".ldr", "_clean.ldr")
     if output_filename == fn and not as_str:
+        # CONVERTED TO F-STRING
         print(
             f"Error: Cleaned output filename '{output_filename}' is same as input '{fn}'. Aborting to prevent overwrite."
         )
@@ -308,9 +311,11 @@ def clean_file(
                 bytes_out += len(cleaned_line_content.encode("utf-8"))
                 cleaned_lines.append(cleaned_line_content)
     except FileNotFoundError:
+        # CONVERTED TO F-STRING
         print(f"Error: Input file '{fn}' not found for cleaning.")
         return None if not as_str else []
     except Exception as e:
+        # CONVERTED TO F-STRING
         print(f"Error reading file '{fn}': {e}")
         return None if not as_str else []
 
@@ -318,6 +323,7 @@ def clean_file(
         savings_percent = (
             ((bytes_in - bytes_out) / bytes_in * 100.0) if bytes_in > 0 else 0
         )
+        # CONVERTED TO F-STRING
         print(
             f"{fn} : {bytes_in} bytes in / {bytes_out} bytes out ({savings_percent:.1f}% saved)"
         )
@@ -330,5 +336,6 @@ def clean_file(
                 f_out.write("\n".join(cleaned_lines) + "\n")
             return None
         except Exception as e:
+            # CONVERTED TO F-STRING
             print(f"Error writing cleaned file '{output_filename}': {e}")
             return None

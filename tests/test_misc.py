@@ -4,7 +4,7 @@ import os
 import pytest
 from pathlib import Path  # For robust path handling
 
-from ldrawpy import clean_file  # Import specific function needed
+from ldrawpy.ldrhelpers import clean_file  # Import specific function needed
 
 # Get the directory of the current test file (tests/)
 TEST_FILE_DIR = Path(__file__).parent

@@ -39,11 +39,16 @@ from toolbox import (
 )
 
 # Explicit imports from ldrawpy package
-from .constants import (  # CORRECTED: Only import constants actually defined in constants.py
+from .constants import (
     SPECIAL_TOKENS,
     LDR_DEF_COLOUR,
     ASPECT_DICT,
     FLIP_DICT,
+    START_TOKENS,
+    END_TOKENS,
+    EXCEPTION_LIST,
+    IGNORE_LIST,
+    COMMON_SUBSTITUTIONS,
 )
 from .ldrprimitives import LDRPart
 from .ldrhelpers import norm_aspect, preset_aspect
@@ -58,77 +63,12 @@ except ImportError:
 # Import rich directly as it's a dependency
 from rich import print as rich_print
 
-has_rich = True  # Assume rich is available
-
-
-# These constants are defined locally in this module (ldrmodel.py)
-START_TOKENS = ["PLI BEGIN IGN", "BUFEXCHG STORE"]
-END_TOKENS = ["PLI END", "BUFEXCHG RETRIEVE"]
-EXCEPTION_LIST = ["2429c01.dat"]
-IGNORE_LIST = ["LS02"]
-COMMON_SUBSTITUTIONS: List[Tuple[str, str]] = [
-    ("3070a", "3070b"),  # 1 x 1 tile
-    ("3069a", "3069b"),  # 1 x 2 tile
-    ("3068a", "3068b"),  # 2 x 2 tile
-    ("x224", "41751"),  # windscreen
-    ("4864a", "87552"),  # 1 x 2 x 2 panel with side supports
-    ("4864b", "87552"),
-    ("2362a", "87544"),  # 1 x 2 x 3 panel with side supports
-    ("2362b", "87544"),
-    ("60583", "60583b"),  # 1 x 1 x 3 brick with clips
-    ("60583a", "60583b"),
-    ("3245a", "3245c"),  # 1 x 2 x 2 brick
-    ("3245b", "3245c"),
-    ("3794", "15573"),  # 1 x 2 jumper plate
-    ("3794a", "15573"),
-    ("3794b", "15573"),
-    ("4215a", "60581"),  # 1 x 4 x 3 panel with side supports
-    ("4215b", "60581"),
-    ("4215", "60581"),
-    ("73983", "2429c01"),  # 1 x 4 hinge plate complete
-    ("3665a", "3665"),
-    ("3665b", "3665"),  # 2 x 1 45 deg inv slope
-    ("4081a", "4081b"),  # 1x1 plate with light ring
-    ("4085a", "60897"),  # 1x1 plate with vert clip
-    ("4085b", "60897"),
-    ("4085c", "60897"),
-    ("6019", "61252"),  # 1x1 plate with horz clip
-    ("59426", "32209"),  # technic 5.5 axle
-    ("48729", "48729b"),  # bar with clip
-    ("48729a", "48729b"),
-    ("41005", "48729b"),
-    ("4459", "2780"),  # Technic friction pin
-    ("44302", "44302a"),  # 1x2 click hinge plate
-    ("44302b", "44302a"),
-    ("2436", "28802"),  # 1x2 x 1x4 bracket
-    ("2436a", "28802"),
-    ("2436b", "28802"),
-    ("2454", "2454b"),  # 1x2x5 brick
-    ("64567", "577b"),  # minifig lightsabre holder
-    ("30241b", "60475b"),
-    ("2861", "2861c01"),
-    ("2859", "2859c01"),
-    ("70026a", "70026"),
-    ("4707pb01", "4707c01"),
-    ("4707pb02", "4707c02"),
-    ("4707pb03", "4707c03"),
-    ("4707pb04", "4707c04"),
-    ("4707pb05", "4707c05"),
-    ("3242", "3240a"),
-    ("2776c28", "766bc03"),
-    ("766c96", "766bc03"),
-    ("7864-1", "u9058c02"),
-    ("bb0012vb", "501bc01"),
-    ("bb0012v2", "867"),
-    ("70026b", "70026"),
-    ("3242c", "3240a"),
-    ("4623b", "4623"),
-    ("4623a", "4623"),
-]
+# No need for has_rich and fallback if rich is a hard dependency.
+# If it were optional, the try-except for has_rich would be appropriate.
 
 
 def substitute_part(part: LDRPart) -> LDRPart:
-    for e in COMMON_SUBSTITUTIONS:  # Uses local COMMON_SUBSTITUTIONS
+    for e in COMMON_SUBSTITUTIONS:
         if part.name == e[0]:
             part.name = e[1]
     return part
@@ -145,10 +85,7 @@ def line_has_all_tokens(line: str, tokenlist: List[str]) -> bool:
 def parse_special_tokens(line: str) -> List[Dict[str, Any]]:
     ls = line.strip().split()
     metas: List[Dict[str, Any]] = []
-    for (
-        cmd_key,
-        token_patterns,
-    ) in SPECIAL_TOKENS.items():  # Uses SPECIAL_TOKENS from .constants
+    for cmd_key, token_patterns in SPECIAL_TOKENS.items():
         for pattern_str in token_patterns:
             pattern_tokens = pattern_str.split()
             non_placeholder_pattern_tokens = [
@@ -156,7 +93,6 @@ def parse_special_tokens(line: str) -> List[Dict[str, Any]]:
             ]
             if not all(nppt in ls for nppt in non_placeholder_pattern_tokens):
                 continue
-
             extracted_values: List[str] = []
             valid_match_for_values = True
             try:
@@ -173,12 +109,10 @@ def parse_special_tokens(line: str) -> List[Dict[str, Any]]:
                             break
             except (ValueError, IndexError):
                 valid_match_for_values = False
-
             if not valid_match_for_values and any(
                 pt.startswith("%") for pt in pattern_tokens
             ):
                 continue
-
             if extracted_values:
                 metas.append(
                     {cmd_key: {"values": extracted_values, "text": line.strip()}}
@@ -212,7 +146,6 @@ def get_parts_from_model(ldr_string: str) -> List[Dict[str, str]]:
         stripped_line = line.lstrip()
         if not stripped_line:
             continue
-        # Uses global START_TOKENS, END_TOKENS, EXCEPTION_LIST, IGNORE_LIST from this module
         if line_has_all_tokens(line, ["BUFEXCHG STORE"]):
             bufex = True
         if line_has_all_tokens(line, ["BUFEXCHG RETRIEVE"]):
@@ -276,9 +209,8 @@ def recursive_parse_model(
             actual_part = LDRPart()
             if actual_part.from_str(ldr_text) is None:
                 continue
-            actual_part = substitute_part(actual_part)  # Uses local substitute_part
+            actual_part = substitute_part(actual_part)
             actual_part.transform(matrix=current_matrix, offset=current_offset)
-            # Uses local IGNORE_LIST
             if (
                 actual_part.name not in IGNORE_LIST
                 and actual_part.name.upper() not in IGNORE_LIST
@@ -380,10 +312,12 @@ class LDRModel:
             self.bom.ignore_parts = []
 
     def __str__(self) -> str:
+        # CONVERTED TO F-STRING
         return (
             f"LDRModel: {self.title}\n"
-            f"  Steps: {len(self.steps)}, SubModels: {len(self.sub_models)}\n"
-            f"  Global Aspect: {self.global_aspect}"
+            f"  Global origin: {self.global_origin} Global aspect: {self.global_aspect}\n"
+            f"  Number of steps: {len(self.steps)}\n"
+            f"  Number of sub-models: {len(self.sub_models)}"
         )
 
     def __getitem__(self, key: int) -> Dict[str, Any]:
@@ -397,16 +331,53 @@ class LDRModel:
         if key in self.steps:
             s_dict = self.steps[key]
             for k, v in s_dict.items():
-                rich_print(f"[blue]{k}:[/blue] {type(v)}")
+                # CONVERTED TO F-STRINGS (example, can be more detailed)
+                if k == "sub_parts" and isinstance(v, dict):
+                    rich_print(f"[bold blue]{k}:[/bold blue]")
+                    for ks_sub, vs_list_sub in v.items():
+                        rich_print(f"  [cyan]{ks_sub}:[/cyan]")
+                        for e_part_sub in vs_list_sub:
+                            rich_print(f"    {str(e_part_sub).rstrip()}")
+                elif isinstance(v, list) and all(
+                    isinstance(item, LDRPart) for item in v
+                ):
+                    rich_print(f"[bold blue]{k}:[/bold blue] ({len(v)} items)")
+                    for vx_part_item in v:
+                        rich_print(f"  {str(vx_part_item).rstrip()}")
+                elif k == "pli_bom" and BOM is not None and isinstance(v, BOM):
+                    rich_print(f"[bold blue]{k}:[/bold blue]")
+                    if hasattr(v, "summary_str"):
+                        rich_print(f"  {v.summary_str()}")
+                    else:
+                        rich_print(f"  {v}")
+                else:
+                    rich_print(f"[bold blue]{k}:[/bold blue] {v}")
         else:
-            rich_print(f"Step {key} not found.")
+            rich_print(f"Step {key} not found.")  # f-string
 
     def print_unwrapped_dict(self, idx: int):
         if self.unwrapped is None or not (0 <= idx < len(self.unwrapped)):
-            rich_print(f"Index {idx} out of bounds.")
-            return
-        for k, v in self.unwrapped[idx].items():
-            rich_print(f"[green]{k}:[/green] {type(v)}")
+            rich_print(f"Index {idx} out of bounds for unwrapped model.")
+            return  # f-string
+        s_dict = self.unwrapped[idx]
+        for k, v in s_dict.items():
+            # CONVERTED TO F-STRINGS (example)
+            if (
+                k in ("parts", "step_parts")
+                and isinstance(v, list)
+                and all(isinstance(item, LDRPart) for item in v)
+            ):
+                rich_print(f"[bold green]{k}:[/bold green] ({len(v)} parts)")
+                for vx_part_item in v:
+                    rich_print(f"  {str(vx_part_item).rstrip()}")
+            elif k == "pli_bom" and BOM is not None and isinstance(v, BOM):
+                rich_print(f"[bold green]{k}:[/bold green]")
+                if hasattr(v, "summary_str"):
+                    rich_print(f"  {v.summary_str()}")
+                else:
+                    rich_print(f"  {v}")
+            else:
+                rich_print(f"[bold green]{k}:[/bold green] {v}")
 
     def print_unwrapped_verbose(self):
         if not self.unwrapped:
@@ -414,6 +385,7 @@ class LDRModel:
             return
         for i, v in enumerate(self.unwrapped):
             aspect = v.get("aspect", (0.0, 0.0, 0.0))
+            # ALREADY F-STRING
             rich_print(
                 f"{i:3d}. idx:{v.get('idx','N/A'):3} "
                 f"[pl:{v.get('prev_level', 'N/A')} l:{v.get('level','N/A')} nl:{v.get('next_level', 'N/A')}] "
@@ -431,9 +403,43 @@ class LDRModel:
 
     def print_step(self, v_step: dict):
         _print_func = rich_print
-        _print_func(
-            f"Idx: {v_step.get('idx', 'N/A')}, Step: {v_step.get('step', 'N/A')}, Model: {v_step.get('model', 'N/A')}"
+        pb = "break" if v_step.get("page_break") else ""
+        co = str(v_step.get("callout", 0))
+        model_name = str(v_step.get("model", "")).replace(".ldr", "")[:16]
+        qty = f"({v_step.get('qty',0):2d}x)" if v_step.get("qty", 0) > 0 else "     "
+        level_str = " " * v_step.get("level", 0) + f"Level {v_step.get('level',0)}"
+        level_str_padded = f"{level_str:<11}"
+        pli_bom_obj = v_step.get("pli_bom")
+        parts_count = 0
+        if BOM and isinstance(pli_bom_obj, BOM) and hasattr(pli_bom_obj, "parts"):
+            parts_count = len(pli_bom_obj.parts)  # type: ignore
+        elif isinstance(pli_bom_obj, list):
+            parts_count = len(pli_bom_obj)
+        parts_str = f"({parts_count:2d}x pcs)"
+        meta_tags = []
+        for m_item in v_step.get("meta", []):
+            if isinstance(m_item, dict):
+                for k, v_dict in m_item.items():
+                    tag_str = k.replace("_", " ")
+                    if k == "columns" and "values" in v_dict:
+                        meta_tags.append(f"[green]COL{v_dict['values'][0]}[/]")
+                    else:
+                        meta_tags.append(f"[dim]{tag_str}[/dim]")
+            else:
+                meta_tags.append(str(m_item))
+        meta_str = " ".join(meta_tags)
+        aspect = v_step.get("aspect", (0.0, 0.0, 0.0))
+        # ALREADY F-STRINGS (from previous update)
+        fmt_base = (
+            f"{v_step.get('idx','N/A'):3}. {level_str_padded} Step "
+            f"{'[yellow]' if co != '0' and has_rich else '[green]'}{v_step.get('step','N/A'):3}/{v_step.get('num_steps','N/A'):3}{'[/]' if has_rich else ''} "
+            f"Model: {'[red]' if co != '0' and model_name != 'root' and has_rich else '[green]'}{model_name:<16}{'[/]' if has_rich else ''} "
+            f"{qty} {parts_str} scale: {v_step.get('scale',0.0):.2f} "
+            f"({aspect[0]:3.0f},{aspect[1]:4.0f},{aspect[2]:3.0f})"
         )
+        fmt_co = f" {'[yellow]' if has_rich and co != '0' else '[dim]' if has_rich else ''}{co}{'[/]' if has_rich else ''}"
+        fmt_pb = f" {'[magenta]BR[/]' if has_rich and pb else ''}"
+        _print_func(f"{fmt_base}{fmt_co}{fmt_pb} {meta_str}")
 
     def transform_parts_to(
         self,
@@ -498,11 +504,13 @@ class LDRModel:
             with open(self.filename, "rt", encoding="utf-8") as fp:
                 content = fp.read()
         except FileNotFoundError:
+            # CONVERTED TO F-STRING
             rich_print(f"Error: File {self.filename} not found.")
             self.pli, self.steps = {}, {}
             return
         except Exception as e:
-            rich_print(f"Error reading {self.filename}: {e}")
+            # CONVERTED TO F-STRING
+            rich_print(f"Error reading file {self.filename}: {e}")
             self.pli, self.steps = {}, {}
             return
         file_blocks = content.split("0 FILE")
@@ -515,9 +523,19 @@ class LDRModel:
             root_model_content = "0 FILE " + file_blocks[1].strip()
             sub_file_blocks = file_blocks[2:]
         else:
-            rich_print(f"Warning: No root model in {self.filename}.")
+            # CONVERTED TO F-STRING
+            rich_print(
+                f"Warning: No root model found in {self.filename} based on '0 FILE' structure."
+            )
             self.pli, self.steps = {}, {}
-            return
+            if (
+                file_blocks
+                and file_blocks[0].strip()
+                and not content.strip().startswith("0 FILE")
+            ):
+                pass
+            else:
+                return
         for sub_block in sub_file_blocks:
             if not sub_block.strip():
                 continue
@@ -532,7 +550,10 @@ class LDRModel:
         if root_model_content.strip():
             self.pli, self.steps = self.parse_model(root_model_content, True)
         else:
-            rich_print(f"Warning: Root model content for {self.filename} empty.")
+            # CONVERTED TO F-STRING
+            rich_print(
+                f"Warning: Root model content for {self.filename} empty after processing '0 FILE' directives."
+            )
             self.pli, self.steps = {}, {}
         self.unwrap()
 
@@ -768,7 +789,6 @@ class LDRModel:
                 recursive_parse_model(
                     sub_pds, self.sub_models, temp_l, reset_parts_list_on_call=True
                 )
-                # Ensure the result of transform_parts is correctly typed for assignment
                 transformed_sub_parts = self.transform_parts(
                     temp_l, aspect=tuple(current_aspect)
                 )
