@@ -27,6 +27,7 @@ import decimal
 from toolbox import Vector
 from .ldrprimitives import LDRLine, LDRPart
 from .constants import ASPECT_DICT, FLIP_DICT
+from math import pi, sin, cos
 
 
 def quantize(x):
