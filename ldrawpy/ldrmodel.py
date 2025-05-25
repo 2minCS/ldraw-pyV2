@@ -63,8 +63,7 @@ except ImportError:
 # Import rich directly as it's a dependency
 from rich import print as rich_print
 
-# No need for has_rich and fallback if rich is a hard dependency.
-# If it were optional, the try-except for has_rich would be appropriate.
+# REMOVED has_rich and the try-except block for rich import
 
 
 def substitute_part(part: LDRPart) -> LDRPart:
@@ -312,7 +311,6 @@ class LDRModel:
             self.bom.ignore_parts = []
 
     def __str__(self) -> str:
-        # CONVERTED TO F-STRING
         return (
             f"LDRModel: {self.title}\n"
             f"  Global origin: {self.global_origin} Global aspect: {self.global_aspect}\n"
@@ -331,7 +329,6 @@ class LDRModel:
         if key in self.steps:
             s_dict = self.steps[key]
             for k, v in s_dict.items():
-                # CONVERTED TO F-STRINGS (example, can be more detailed)
                 if k == "sub_parts" and isinstance(v, dict):
                     rich_print(f"[bold blue]{k}:[/bold blue]")
                     for ks_sub, vs_list_sub in v.items():
@@ -353,15 +350,14 @@ class LDRModel:
                 else:
                     rich_print(f"[bold blue]{k}:[/bold blue] {v}")
         else:
-            rich_print(f"Step {key} not found.")  # f-string
+            rich_print(f"Step {key} not found.")
 
     def print_unwrapped_dict(self, idx: int):
         if self.unwrapped is None or not (0 <= idx < len(self.unwrapped)):
             rich_print(f"Index {idx} out of bounds for unwrapped model.")
-            return  # f-string
+            return
         s_dict = self.unwrapped[idx]
         for k, v in s_dict.items():
-            # CONVERTED TO F-STRINGS (example)
             if (
                 k in ("parts", "step_parts")
                 and isinstance(v, list)
@@ -385,7 +381,6 @@ class LDRModel:
             return
         for i, v in enumerate(self.unwrapped):
             aspect = v.get("aspect", (0.0, 0.0, 0.0))
-            # ALREADY F-STRING
             rich_print(
                 f"{i:3d}. idx:{v.get('idx','N/A'):3} "
                 f"[pl:{v.get('prev_level', 'N/A')} l:{v.get('level','N/A')} nl:{v.get('next_level', 'N/A')}] "
@@ -402,7 +397,7 @@ class LDRModel:
             self.print_step(v_step)
 
     def print_step(self, v_step: dict):
-        _print_func = rich_print
+        # Removed 'has_rich' checks, assume rich_print is always available
         pb = "break" if v_step.get("page_break") else ""
         co = str(v_step.get("callout", 0))
         model_name = str(v_step.get("model", "")).replace(".ldr", "")[:16]
@@ -429,17 +424,17 @@ class LDRModel:
                 meta_tags.append(str(m_item))
         meta_str = " ".join(meta_tags)
         aspect = v_step.get("aspect", (0.0, 0.0, 0.0))
-        # ALREADY F-STRINGS (from previous update)
+
         fmt_base = (
             f"{v_step.get('idx','N/A'):3}. {level_str_padded} Step "
-            f"{'[yellow]' if co != '0' and has_rich else '[green]'}{v_step.get('step','N/A'):3}/{v_step.get('num_steps','N/A'):3}{'[/]' if has_rich else ''} "
-            f"Model: {'[red]' if co != '0' and model_name != 'root' and has_rich else '[green]'}{model_name:<16}{'[/]' if has_rich else ''} "
+            f"{'[yellow]' if co != '0' else '[green]'}{v_step.get('step','N/A'):3}/{v_step.get('num_steps','N/A'):3}{'[/]'} "
+            f"Model: {'[red]' if co != '0' and model_name != 'root' else '[green]'}{model_name:<16}{'[/]'} "
             f"{qty} {parts_str} scale: {v_step.get('scale',0.0):.2f} "
             f"({aspect[0]:3.0f},{aspect[1]:4.0f},{aspect[2]:3.0f})"
         )
-        fmt_co = f" {'[yellow]' if has_rich and co != '0' else '[dim]' if has_rich else ''}{co}{'[/]' if has_rich else ''}"
-        fmt_pb = f" {'[magenta]BR[/]' if has_rich and pb else ''}"
-        _print_func(f"{fmt_base}{fmt_co}{fmt_pb} {meta_str}")
+        fmt_co = f" {'[yellow]' if co != '0' else '[dim]'}{co}{'[/]'}"
+        fmt_pb = f" {'[magenta]BR[/]' if pb else ''}"
+        rich_print(f"{fmt_base}{fmt_co}{fmt_pb} {meta_str}")
 
     def transform_parts_to(
         self,
@@ -504,12 +499,10 @@ class LDRModel:
             with open(self.filename, "rt", encoding="utf-8") as fp:
                 content = fp.read()
         except FileNotFoundError:
-            # CONVERTED TO F-STRING
             rich_print(f"Error: File {self.filename} not found.")
             self.pli, self.steps = {}, {}
             return
         except Exception as e:
-            # CONVERTED TO F-STRING
             rich_print(f"Error reading file {self.filename}: {e}")
             self.pli, self.steps = {}, {}
             return
@@ -523,7 +516,6 @@ class LDRModel:
             root_model_content = "0 FILE " + file_blocks[1].strip()
             sub_file_blocks = file_blocks[2:]
         else:
-            # CONVERTED TO F-STRING
             rich_print(
                 f"Warning: No root model found in {self.filename} based on '0 FILE' structure."
             )
@@ -550,7 +542,6 @@ class LDRModel:
         if root_model_content.strip():
             self.pli, self.steps = self.parse_model(root_model_content, True)
         else:
-            # CONVERTED TO F-STRING
             rich_print(
                 f"Warning: Root model content for {self.filename} empty after processing '0 FILE' directives."
             )
