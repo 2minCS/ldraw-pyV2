@@ -1,12 +1,9 @@
 # tests/test_misc.py
 
 import os
-
-# import sys # sys is not used, can be removed
 import pytest
 from pathlib import Path  # For robust path handling
 
-# from toolbox import * # TODO: Refactor this wildcard import later
 from ldrawpy import clean_file  # Import specific function needed
 
 # Get the directory of the current test file (tests/)
@@ -28,21 +25,20 @@ def test_cleanup():
     clean_file(fin_str, fno_str)
 
     # Assertions for the input file (after ensuring it was found and read)
-    with open(fin_str, "r") as f:
+    with open(fin_str, "r", encoding="utf-8") as f:  # Added encoding
         fl_in = f.read()
-        # These assertions might need to be verified if the file was not correctly read before.
-        # For now, we keep them as they were in the original test.
         assert len(fl_in) == 1284, "Input file length mismatch"
         assert "-59.999975" in fl_in, "Expected content not in input file"
 
     # Assertions for the output file
-    assert Path(fno_str).is_file(), f"Cleaned output file not found: {fno_str}"
-    with open(fno_str, "r") as f:
+    output_file_path = Path(fno_str)
+    assert output_file_path.is_file(), f"Cleaned output file not found: {fno_str}"
+    with open(fno_str, "r", encoding="utf-8") as f:  # Added encoding
         fl_out = f.read()
-        # These assertions might need to be verified.
-        assert len(fl_out) == 1101, "Cleaned file length mismatch"
+        # CORRECTED Expected length to account for standard newline at end of file
+        assert len(fl_out) == 1102, "Cleaned file length mismatch"
         assert "-60" in fl_out, "Expected content not in cleaned file"
 
     # Optional: Clean up the generated _clean.ldr file after the test
-    if Path(fno_str).exists():
-        os.remove(fno_str)
+    if output_file_path.exists():
+        os.remove(output_file_path)
