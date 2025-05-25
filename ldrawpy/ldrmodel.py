@@ -39,16 +39,12 @@ from toolbox import (
 )
 
 # Explicit imports from ldrawpy package
-from .constants import (
+from .constants import (  # CORRECTED: Only import constants actually defined in constants.py
     SPECIAL_TOKENS,
     LDR_DEF_COLOUR,
     ASPECT_DICT,
     FLIP_DICT,
-    START_TOKENS,
-    END_TOKENS,
-    EXCEPTION_LIST,
-    IGNORE_LIST,
-    COMMON_SUBSTITUTIONS,
+    # START_TOKENS, END_TOKENS, EXCEPTION_LIST, IGNORE_LIST, COMMON_SUBSTITUTIONS # REMOVED THESE AGAIN
 )
 from .ldrprimitives import LDRPart
 from .ldrhelpers import norm_aspect, preset_aspect
@@ -63,11 +59,75 @@ except ImportError:
 # Import rich directly as it's a dependency
 from rich import print as rich_print
 
-# REMOVED has_rich and the try-except block for rich import
+
+# These constants are defined locally in this module (ldrmodel.py)
+START_TOKENS = ["PLI BEGIN IGN", "BUFEXCHG STORE"]
+END_TOKENS = ["PLI END", "BUFEXCHG RETRIEVE"]
+EXCEPTION_LIST = ["2429c01.dat"]
+IGNORE_LIST = ["LS02"]
+COMMON_SUBSTITUTIONS: List[Tuple[str, str]] = [
+    ("3070a", "3070b"),  # 1 x 1 tile
+    ("3069a", "3069b"),  # 1 x 2 tile
+    ("3068a", "3068b"),  # 2 x 2 tile
+    ("x224", "41751"),  # windscreen
+    ("4864a", "87552"),  # 1 x 2 x 2 panel with side supports
+    ("4864b", "87552"),
+    ("2362a", "87544"),  # 1 x 2 x 3 panel with side supports
+    ("2362b", "87544"),
+    ("60583", "60583b"),  # 1 x 1 x 3 brick with clips
+    ("60583a", "60583b"),
+    ("3245a", "3245c"),  # 1 x 2 x 2 brick
+    ("3245b", "3245c"),
+    ("3794", "15573"),  # 1 x 2 jumper plate
+    ("3794a", "15573"),
+    ("3794b", "15573"),
+    ("4215a", "60581"),  # 1 x 4 x 3 panel with side supports
+    ("4215b", "60581"),
+    ("4215", "60581"),
+    ("73983", "2429c01"),  # 1 x 4 hinge plate complete
+    ("3665a", "3665"),
+    ("3665b", "3665"),  # 2 x 1 45 deg inv slope
+    ("4081a", "4081b"),  # 1x1 plate with light ring
+    ("4085a", "60897"),  # 1x1 plate with vert clip
+    ("4085b", "60897"),
+    ("4085c", "60897"),
+    ("6019", "61252"),  # 1x1 plate with horz clip
+    ("59426", "32209"),  # technic 5.5 axle
+    ("48729", "48729b"),  # bar with clip
+    ("48729a", "48729b"),
+    ("41005", "48729b"),
+    ("4459", "2780"),  # Technic friction pin
+    ("44302", "44302a"),  # 1x2 click hinge plate
+    ("44302b", "44302a"),
+    ("2436", "28802"),  # 1x2 x 1x4 bracket
+    ("2436a", "28802"),
+    ("2436b", "28802"),
+    ("2454", "2454b"),  # 1x2x5 brick
+    ("64567", "577b"),  # minifig lightsabre holder
+    ("30241b", "60475b"),
+    ("2861", "2861c01"),
+    ("2859", "2859c01"),
+    ("70026a", "70026"),
+    ("4707pb01", "4707c01"),
+    ("4707pb02", "4707c02"),
+    ("4707pb03", "4707c03"),
+    ("4707pb04", "4707c04"),
+    ("4707pb05", "4707c05"),
+    ("3242", "3240a"),
+    ("2776c28", "766bc03"),
+    ("766c96", "766bc03"),
+    ("7864-1", "u9058c02"),
+    ("bb0012vb", "501bc01"),
+    ("bb0012v2", "867"),
+    ("70026b", "70026"),
+    ("3242c", "3240a"),
+    ("4623b", "4623"),
+    ("4623a", "4623"),
+]
 
 
 def substitute_part(part: LDRPart) -> LDRPart:
-    for e in COMMON_SUBSTITUTIONS:
+    for e in COMMON_SUBSTITUTIONS:  # Uses local COMMON_SUBSTITUTIONS
         if part.name == e[0]:
             part.name = e[1]
     return part
@@ -84,7 +144,10 @@ def line_has_all_tokens(line: str, tokenlist: List[str]) -> bool:
 def parse_special_tokens(line: str) -> List[Dict[str, Any]]:
     ls = line.strip().split()
     metas: List[Dict[str, Any]] = []
-    for cmd_key, token_patterns in SPECIAL_TOKENS.items():
+    for (
+        cmd_key,
+        token_patterns,
+    ) in SPECIAL_TOKENS.items():  # Uses SPECIAL_TOKENS from .constants
         for pattern_str in token_patterns:
             pattern_tokens = pattern_str.split()
             non_placeholder_pattern_tokens = [
@@ -92,6 +155,7 @@ def parse_special_tokens(line: str) -> List[Dict[str, Any]]:
             ]
             if not all(nppt in ls for nppt in non_placeholder_pattern_tokens):
                 continue
+
             extracted_values: List[str] = []
             valid_match_for_values = True
             try:
@@ -108,10 +172,12 @@ def parse_special_tokens(line: str) -> List[Dict[str, Any]]:
                             break
             except (ValueError, IndexError):
                 valid_match_for_values = False
+
             if not valid_match_for_values and any(
                 pt.startswith("%") for pt in pattern_tokens
             ):
                 continue
+
             if extracted_values:
                 metas.append(
                     {cmd_key: {"values": extracted_values, "text": line.strip()}}
@@ -145,6 +211,7 @@ def get_parts_from_model(ldr_string: str) -> List[Dict[str, str]]:
         stripped_line = line.lstrip()
         if not stripped_line:
             continue
+        # Uses global START_TOKENS, END_TOKENS, EXCEPTION_LIST from this module
         if line_has_all_tokens(line, ["BUFEXCHG STORE"]):
             bufex = True
         if line_has_all_tokens(line, ["BUFEXCHG RETRIEVE"]):
@@ -208,8 +275,9 @@ def recursive_parse_model(
             actual_part = LDRPart()
             if actual_part.from_str(ldr_text) is None:
                 continue
-            actual_part = substitute_part(actual_part)
+            actual_part = substitute_part(actual_part)  # Uses local substitute_part
             actual_part.transform(matrix=current_matrix, offset=current_offset)
+            # Uses local IGNORE_LIST
             if (
                 actual_part.name not in IGNORE_LIST
                 and actual_part.name.upper() not in IGNORE_LIST
@@ -397,7 +465,6 @@ class LDRModel:
             self.print_step(v_step)
 
     def print_step(self, v_step: dict):
-        # Removed 'has_rich' checks, assume rich_print is always available
         pb = "break" if v_step.get("page_break") else ""
         co = str(v_step.get("callout", 0))
         model_name = str(v_step.get("model", "")).replace(".ldr", "")[:16]
@@ -424,7 +491,6 @@ class LDRModel:
                 meta_tags.append(str(m_item))
         meta_str = " ".join(meta_tags)
         aspect = v_step.get("aspect", (0.0, 0.0, 0.0))
-
         fmt_base = (
             f"{v_step.get('idx','N/A'):3}. {level_str_padded} Step "
             f"{'[yellow]' if co != '0' else '[green]'}{v_step.get('step','N/A'):3}/{v_step.get('num_steps','N/A'):3}{'[/]'} "
