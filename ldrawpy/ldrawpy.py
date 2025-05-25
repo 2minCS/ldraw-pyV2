@@ -23,9 +23,9 @@
 #
 # LDraw python module
 
-from toolbox import *
+from toolbox import Vector
 
-from .constants import *
+from .constants import LDR_DEF_COLOUR, LDR_OPT_COLOUR
 from .ldrprimitives import LDRTriangle, LDRLine
 
 

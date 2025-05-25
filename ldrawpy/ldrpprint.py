@@ -26,7 +26,10 @@
 import string
 
 from rich import print
-from ldrawpy import *
+
+# from ldrawpy import *
+from .ldrcolour import LDRColour
+from .constants import META_TOKENS, LDRAW_TOKENS
 
 
 def is_hex_colour(text):

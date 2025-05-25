@@ -44,7 +44,6 @@ from .constants import (  # CORRECTED: Only import constants actually defined in
     LDR_DEF_COLOUR,
     ASPECT_DICT,
     FLIP_DICT,
-    # START_TOKENS, END_TOKENS, EXCEPTION_LIST, IGNORE_LIST, COMMON_SUBSTITUTIONS # REMOVED THESE - They are defined below
 )
 from .ldrprimitives import LDRPart
 from .ldrhelpers import norm_aspect, preset_aspect

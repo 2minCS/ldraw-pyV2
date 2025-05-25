@@ -24,8 +24,9 @@
 # LDraw related helper functions
 
 import decimal
-from toolbox import *
-from ldrawpy import *
+from toolbox import Vector
+from .ldrprimitives import LDRLine, LDRPart
+from .constants import ASPECT_DICT, FLIP_DICT
 
 
 def quantize(x):
@@ -75,7 +76,6 @@ def vector_str(p, attrib):
 
 
 def get_circle_segments(radius, segments, attrib):
-    from .ldrprimitives import LDRLine
 
     lines = []
     for seg in range(segments):
@@ -98,7 +98,6 @@ def ldrlist_from_parts(parts):
     """Returns a list of LDRPart objects from either a list of LDRParts,
     a list of strings representing parts or a string with line feed
     delimited parts."""
-    from .ldrprimitives import LDRPart
 
     p = []
     if isinstance(parts, str):
@@ -118,7 +117,6 @@ def ldrlist_from_parts(parts):
 def ldrstring_from_list(parts):
     """Returns a LDraw formatted string from a list of parts.  Each part
     is represented in a line feed terminated string concatenated together."""
-    from .ldrprimitives import LDRPart
 
     s = []
     for p in parts:
@@ -134,7 +132,6 @@ def ldrstring_from_list(parts):
 
 def merge_same_parts(parts, other, ignore_colour=False, as_str=False):
     """Merges parts + other where the the parts in other take precedence."""
-    from .ldrprimitives import LDRPart
 
     op = ldrlist_from_parts(other)
     p = ldrlist_from_parts(other)
