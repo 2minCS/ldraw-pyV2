@@ -43,7 +43,7 @@ from toolbox import (
 
 # Explicit relative imports from ldrawpy package
 # ADDED LDRAW_TOKENS, META_TOKENS
-from .constants import OPT_COLOUR, ASPECT_DICT, FLIP_DICT, LDRAW_TOKENS, META_TOKENS
+from .constants import LDR_OPT_COLOUR, ASPECT_DICT, FLIP_DICT, LDRAW_TOKENS, META_TOKENS
 
 # Forward declaration for LDRPart and LDRLine to avoid circular import
 if TYPE_CHECKING:

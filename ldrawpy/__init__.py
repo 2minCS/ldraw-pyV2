@@ -73,7 +73,7 @@ from .ldrhelpers import (
     val_units,
     mat_str,
     vector_str,
-    get_circle_segments,
+    GetCircleSegments,
     ldrlist_from_parts,
     ldrstring_from_list,
     merge_same_parts,
@@ -199,7 +199,7 @@ __all__ = [
     "MM2LDU",
     "LDU2MM",
     "val_units",
-    "get_circle_segments",
+    "GetCircleSegments",
     "norm_angle",
     "preset_aspect",
     # ldrprimitives

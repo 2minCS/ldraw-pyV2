@@ -37,7 +37,7 @@ from toolbox import (
 
 # Explicit relative imports from ldrawpy package
 from .ldrprimitives import LDRAttrib, LDRQuad, LDRLine, LDRTriangle
-from .ldrhelpers import get_circle_segments  # get_circle_segments is in ldrhelpers
+from .ldrhelpers import GetCircleSegments  # GetCircleSegments is in ldrhelpers
 from .constants import LDR_DEF_COLOUR, LDR_OPT_COLOUR
 
 
@@ -151,11 +151,11 @@ class LDRCircle:
 
     def __str__(self) -> str:
         s_list: List[str] = []
-        # get_circle_segments expects LDRAttrib for color/units, but not for loc/matrix here
+        # get_cirGetCircleSegmentscle_segments expects LDRAttrib for color/units, but not for loc/matrix here
         # as those are applied after the segments are generated relative to origin.
-        # Create a temporary attrib for segment generation if get_circle_segments uses its color/units.
+        # Create a temporary attrib for segment generation if GetCircleSegments uses its color/units.
         temp_attrib_for_segments = LDRAttrib(self.attrib.colour, self.attrib.units)
-        circle_lines_local: List[LDRLine] = get_circle_segments(
+        circle_lines_local: List[LDRLine] = GetCircleSegments(
             float(self.radius), self.segments, temp_attrib_for_segments
         )
 
@@ -199,10 +199,10 @@ class LDRDisc:  # A disc is a ring (border)
 
         temp_attrib_for_segments = LDRAttrib(self.attrib.colour, self.attrib.units)
 
-        inner_lines_local: List[LDRLine] = get_circle_segments(
+        inner_lines_local: List[LDRLine] = GetCircleSegments(
             inner_radius, self.segments, temp_attrib_for_segments
         )
-        outer_lines_local: List[LDRLine] = get_circle_segments(
+        outer_lines_local: List[LDRLine] = GetCircleSegments(
             outer_radius, self.segments, temp_attrib_for_segments
         )
 
@@ -298,7 +298,7 @@ class LDRHole:  # Creates a square with a hole, not just a hole in an infinite p
             temp_attrib_edge = LDRAttrib(LDR_OPT_COLOUR, self.attrib.units)
             temp_attrib_main = LDRAttrib(self.attrib.colour, self.attrib.units)
 
-            inner_lines_local: List[LDRLine] = get_circle_segments(
+            inner_lines_local: List[LDRLine] = GetCircleSegments(
                 hole_radius, self.segments, temp_attrib_edge
             )
 
@@ -311,7 +311,7 @@ class LDRHole:  # Creates a square with a hole, not just a hole in an infinite p
             if self.outer_size <= hole_radius * 2:
                 outer_radius_for_washer = hole_radius * 1.2  # Ensure outer is larger
 
-            outer_lines_local: List[LDRLine] = get_circle_segments(
+            outer_lines_local: List[LDRLine] = GetCircleSegments(
                 outer_radius_for_washer, self.segments, temp_attrib_edge
             )
 
@@ -363,7 +363,7 @@ class LDRCylinder:
         radius_f, height_f = float(self.radius), float(self.height)
 
         temp_attrib_for_segments = LDRAttrib(self.attrib.colour, self.attrib.units)
-        circle_lines_local: List[LDRLine] = get_circle_segments(
+        circle_lines_local: List[LDRLine] = GetCircleSegments(
             radius_f, self.segments, temp_attrib_for_segments
         )
 
