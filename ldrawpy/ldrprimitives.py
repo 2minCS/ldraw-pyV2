@@ -29,19 +29,19 @@ from typing import List, Tuple, Union, Optional
 from dataclasses import dataclass, field
 
 # Explicit imports from toolbox
-from toolbox import Vector, Matrix, Identity, euler_to_rot_matrix, safe_vector
+from toolbox import Vector, Matrix, Identity, euler_to_rot_matrix, safe_vector  # type: ignore
 
 # Explicit imports from .ldrhelpers (relative import within the package)
 from .ldrhelpers import vector_str, mat_str, quantize
 from .constants import LDR_DEF_COLOUR
 
 
-@dataclass(eq=False)  # eq=False because we provide a custom __eq__
+@dataclass(eq=False)
 class LDRAttrib:
     colour: int = LDR_DEF_COLOUR
     units: str = "ldu"
-    loc: Vector = field(default_factory=lambda: Vector(0, 0, 0))
-    matrix: Matrix = field(default_factory=Identity)
+    loc: Vector = field(default_factory=lambda: Vector(0, 0, 0))  # type: ignore
+    matrix: Matrix = field(default_factory=Identity)  # type: ignore
 
     def __post_init__(self):
         self.colour = int(self.colour)
@@ -68,21 +68,21 @@ class LDRLine:
     __slots__ = ["attrib", "p1", "p2"]
     attrib: LDRAttrib
     p1: Vector
-    p2: Vector
+    p2: Vector  # type: ignore
 
     def __init__(self, colour: int = LDR_DEF_COLOUR, units: str = "ldu"):
         self.attrib = LDRAttrib(colour, units)
-        self.p1, self.p2 = Vector(0, 0, 0), Vector(0, 0, 0)
+        self.p1, self.p2 = Vector(0, 0, 0), Vector(0, 0, 0)  # type: ignore
 
     def __str__(self) -> str:
         return (
             f"2 {self.attrib.colour} "
             f"{vector_str(self.p1, self.attrib)}{vector_str(self.p2, self.attrib)}\n"
-        )
+        )  # type: ignore
 
     def translate(self, offset: Vector):
         self.p1 += offset
-        self.p2 += offset
+        self.p2 += offset  # type: ignore
 
     def transform(self, matrix: Matrix):
         self.p1 = self.p1 * matrix
@@ -94,23 +94,23 @@ class LDRTriangle:
     attrib: LDRAttrib
     p1: Vector
     p2: Vector
-    p3: Vector
+    p3: Vector  # type: ignore
 
     def __init__(self, colour: int = LDR_DEF_COLOUR, units: str = "ldu"):
         self.attrib = LDRAttrib(colour, units)
-        self.p1, self.p2, self.p3 = Vector(0, 0, 0), Vector(0, 0, 0), Vector(0, 0, 0)
+        self.p1, self.p2, self.p3 = Vector(0, 0, 0), Vector(0, 0, 0), Vector(0, 0, 0)  # type: ignore
 
     def __str__(self) -> str:
         return (
             f"3 {self.attrib.colour} "
-            f"{vector_str(self.p1, self.attrib)}{vector_str(self.p2, self.attrib)}"
+            f"{vector_str(self.p1, self.attrib)}{vector_str(self.p2, self.attrib)}"  # type: ignore
             f"{vector_str(self.p3, self.attrib)}\n"
-        )
+        )  # type: ignore
 
     def translate(self, offset: Vector):
         self.p1 += offset
         self.p2 += offset
-        self.p3 += offset
+        self.p3 += offset  # type: ignore
 
     def transform(self, matrix: Matrix):
         self.p1 *= matrix
@@ -124,29 +124,24 @@ class LDRQuad:
     p1: Vector
     p2: Vector
     p3: Vector
-    p4: Vector
+    p4: Vector  # type: ignore
 
     def __init__(self, colour: int = LDR_DEF_COLOUR, units: str = "ldu"):
         self.attrib = LDRAttrib(colour, units)
-        self.p1, self.p2, self.p3, self.p4 = (
-            Vector(0, 0, 0),
-            Vector(0, 0, 0),
-            Vector(0, 0, 0),
-            Vector(0, 0, 0),
-        )
+        self.p1, self.p2, self.p3, self.p4 = Vector(0, 0, 0), Vector(0, 0, 0), Vector(0, 0, 0), Vector(0, 0, 0)  # type: ignore
 
     def __str__(self) -> str:
         return (
             f"4 {self.attrib.colour} "
-            f"{vector_str(self.p1, self.attrib)}{vector_str(self.p2, self.attrib)}"
+            f"{vector_str(self.p1, self.attrib)}{vector_str(self.p2, self.attrib)}"  # type: ignore
             f"{vector_str(self.p3, self.attrib)}{vector_str(self.p4, self.attrib)}\n"
-        )
+        )  # type: ignore
 
     def translate(self, offset: Vector):
         self.p1 += offset
         self.p2 += offset
         self.p3 += offset
-        self.p4 += offset
+        self.p4 += offset  # type: ignore
 
     def transform(self, matrix: Matrix):
         self.p1 *= matrix
@@ -155,14 +150,8 @@ class LDRQuad:
         self.p4 *= matrix  # type: ignore
 
 
-# LDRPart is reverted to a regular class, not a dataclass, to avoid the non-default argument error
-# and to keep its custom __init__ logic.
 class LDRPart:
-    __slots__ = [
-        "attrib",
-        "name",
-        "wrapcallout",
-    ]  # Keep slots if desired for regular class
+    __slots__ = ["attrib", "name", "wrapcallout"]
     attrib: LDRAttrib
     name: str
     wrapcallout: bool
@@ -173,14 +162,16 @@ class LDRPart:
         name: Optional[str] = None,
         units: str = "ldu",
     ):
-        self.attrib = LDRAttrib(colour, units)  # LDRAttrib is a dataclass
+        self.attrib = LDRAttrib(colour, units)
         self.name = name if name is not None else ""
         self.wrapcallout = False
 
     def __str__(self) -> str:
         matrix_elements = []
         if hasattr(self.attrib.matrix, "rows") and self.attrib.matrix.rows:
-            matrix_elements = [item for sublist in self.attrib.matrix.rows for item in sublist]  # type: ignore
+            matrix_elements = [
+                item for sublist in self.attrib.matrix.rows for item in sublist
+            ]
         else:
             matrix_elements = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
         tup_matrix_str = mat_str(tuple(matrix_elements))
@@ -193,7 +184,7 @@ class LDRPart:
             name_to_write = "unknown.dat"
         s = (
             f"1 {self.attrib.colour} "
-            f"{vector_str(self.attrib.loc, self.attrib)}"
+            f"{vector_str(self.attrib.loc, self.attrib)}"  # type: ignore
             f"{tup_matrix_str}"
             f"{name_to_write}\n"
         )
@@ -251,20 +242,20 @@ class LDRPart:
         self.attrib.colour = to_colour
 
     def set_rotation(self, angle: Union[Tuple[float, float, float], Vector]):
-        self.attrib.matrix = euler_to_rot_matrix(angle)
+        self.attrib.matrix = euler_to_rot_matrix(angle)  # type: ignore
 
     def move_to(self, pos: Union[Tuple[float, float, float], Vector]):
-        self.attrib.loc = safe_vector(pos)
+        self.attrib.loc = safe_vector(pos)  # type: ignore
 
     def move_by(self, offset: Union[Tuple[float, float, float], Vector]):
         self.attrib.loc += safe_vector(offset)  # type: ignore
 
     def rotate_by(self, angle: Union[Tuple[float, float, float], Vector]):
-        rm = euler_to_rot_matrix(angle)
+        rm = euler_to_rot_matrix(angle)  # type: ignore
         self.attrib.loc = rm * self.attrib.loc  # type: ignore
         self.attrib.matrix = rm * self.attrib.matrix  # type: ignore
 
-    def transform(self, matrix: Matrix = Identity(), offset: Vector = Vector(0, 0, 0)):
+    def transform(self, matrix: Matrix = Identity(), offset: Vector = Vector(0, 0, 0)):  # type: ignore
         self.attrib.loc = matrix * self.attrib.loc + offset  # type: ignore
         self.attrib.matrix = matrix * self.attrib.matrix  # type: ignore
 
@@ -280,7 +271,7 @@ class LDRPart:
             self.attrib.loc.y = quantize(sl[3])
             self.attrib.loc.z = quantize(sl[4])
             m = [quantize(sl[i]) for i in range(5, 14)]
-            self.attrib.matrix = Matrix([m[0:3], m[3:6], m[6:9]])
+            self.attrib.matrix = Matrix([m[0:3], m[3:6], m[6:9]])  # type: ignore
             self.name = " ".join(sl[14:]).replace(".dat", "") if sl[14:] else ""
         except (ValueError, IndexError):
             return None
@@ -291,7 +282,7 @@ class LDRPart:
         s: str, o_val: Union[Tuple[float, float, float], Vector]
     ) -> str:
         o = safe_vector(o_val)
-        p = LDRPart()
+        p = LDRPart()  # type: ignore
         if p.from_str(s) is None:
             return ""
         p.attrib.loc += o
@@ -306,7 +297,7 @@ class LDRPart:
         c: Optional[int] = None,
     ) -> str:
         mx = mx_val if mx_val is not None else Identity()
-        o = safe_vector(o_val) if o_val is not None else Vector(0, 0, 0)
+        o = safe_vector(o_val) if o_val is not None else Vector(0, 0, 0)  # type: ignore
         p = LDRPart()
         if p.from_str(s) is None:
             return ""

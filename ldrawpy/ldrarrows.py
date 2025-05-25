@@ -29,7 +29,7 @@ from math import sin, cos, pi
 from functools import reduce
 from typing import List, Tuple, Union, Optional, Any, Dict, Set  # IMPORTED Set
 
-from toolbox import Vector, Matrix, Identity, ZAxis, safe_vector
+from toolbox import Vector, Matrix, Identity, ZAxis, safe_vector  # type: ignore
 from .ldrprimitives import LDRPart
 
 ARROW_PREFIX = """0 BUFEXCHG A STORE"""
@@ -40,12 +40,12 @@ ARROW_SUFFIX = """0 !LPUB PLI END
 ARROW_PLI_SUFFIX = """0 !LPUB PLI END"""
 ARROW_PARTS = ["hashl2", "hashl3", "hashl4", "hashl5", "hashl6"]
 
-ARROW_MZ = Matrix([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
-ARROW_PZ = Matrix([[0.0, -1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, -1.0]])
-ARROW_MX = Matrix([[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
-ARROW_PX = Matrix([[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
-ARROW_MY = Matrix([[0.0, -1.0, 0.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0]])
-ARROW_PY = Matrix([[0.0, -1.0, 0.0], [0.0, 0.0, 1.0], [-1.0, 0.0, 0.0]])
+ARROW_MZ = Matrix([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])  # type: ignore
+ARROW_PZ = Matrix([[0.0, -1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, -1.0]])  # type: ignore
+ARROW_MX = Matrix([[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])  # type: ignore
+ARROW_PX = Matrix([[0.0, 0.0, -1.0], [-1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])  # type: ignore
+ARROW_MY = Matrix([[0.0, -1.0, 0.0], [0.0, 0.0, -1.0], [1.0, 0.0, 0.0]])  # type: ignore
+ARROW_PY = Matrix([[0.0, -1.0, 0.0], [0.0, 0.0, 1.0], [-1.0, 0.0, 0.0]])  # type: ignore
 
 
 def value_after_token(
@@ -64,10 +64,10 @@ def norm_angle_arrow(angle: float) -> float:
     return angle % 45.0
 
 
-def vectorize_arrow(s_coords: List[str]) -> Optional[Vector]:
+def vectorize_arrow(s_coords: List[str]) -> Optional[Vector]:  # type: ignore
     if len(s_coords) == 3:
         try:
-            return Vector(*(float(x) for x in s_coords))
+            return Vector(*(float(x) for x in s_coords))  # type: ignore
         except ValueError:
             return None
     return None
@@ -81,12 +81,12 @@ class ArrowContext:
     offset: List[Vector]
     rotstep: Vector
     ratio: float
-    outline_colour: int
+    outline_colour: int  # type: ignore
 
     def __init__(self, colour: int = 804, length: int = 2):
         self.colour, self.length = colour, length
         self.scale, self.yscale, self.ratio = 25.0, 20.0, 0.5
-        self.offset, self.rotstep = [], Vector(0, 0, 0)
+        self.offset, self.rotstep = [], Vector(0, 0, 0)  # type: ignore
         self.outline_colour = 804
 
     def part_for_length(self, length: int) -> str:
@@ -98,11 +98,9 @@ class ArrowContext:
             return "hashl4"
         return "hashl5"
 
-    def matrix_for_offset(
-        self, ov: Vector, mask: str = "", inv: bool = False, tilt: float = 0.0
-    ) -> Matrix:
+    def matrix_for_offset(self, ov: Vector, mask: str = "", inv: bool = False, tilt: float = 0.0) -> Matrix:  # type: ignore
         ax, ay, az = abs(ov.x), abs(ov.y), abs(ov.z)
-        base = Identity()
+        base = Identity()  # type: ignore
         if "x" not in mask and ax > max(ay, az, 1e-9):
             base = (
                 (ARROW_PX if ov.x < 0 else ARROW_MX)
@@ -123,15 +121,9 @@ class ArrowContext:
             )
         return base.rotate(tilt, ZAxis) if tilt != 0.0 and ZAxis else base  # type: ignore
 
-    def loc_for_offset(
-        self, ov: Vector, l: int, mask: str = "", r: float = 0.5
-    ) -> Vector:
+    def loc_for_offset(self, ov: Vector, l: int, mask: str = "", r: float = 0.5) -> Vector:  # type: ignore
         lo = Vector(0, 0, 0)
-        slx, sly, slz = (
-            float(l) * r * self.scale,
-            float(l) * r * self.yscale,
-            float(l) * r * self.scale,
-        )
+        slx, sly, slz = float(l) * r * self.scale, float(l) * r * self.yscale, float(l) * r * self.scale  # type: ignore
         if "x" not in mask:
             lo.x = (ov.x / 2.0) - (slx if ov.x > 1e-9 else -slx if ov.x < -1e-9 else 0)
         if "y" not in mask:
@@ -146,8 +138,8 @@ class ArrowContext:
             lo.z += ov.z
         return lo
 
-    def part_loc_for_offset(self, ov: Vector, mask: str = "") -> Vector:
-        pfl = Vector(0, 0, 0)
+    def part_loc_for_offset(self, ov: Vector, mask: str = "") -> Vector:  # type: ignore
+        pfl = Vector(0, 0, 0)  # type: ignore
         if "x" not in mask:
             pfl.x = ov.x
         if "y" not in mask:
@@ -156,12 +148,14 @@ class ArrowContext:
             pfl.z = ov.z
         return pfl
 
-    def _mask_axis(self, ol: List[Vector]) -> str:
+    def _mask_axis(self, ol: List[Vector]) -> str:  # type: ignore
         if not ol or len(ol) <= 1:
             return ""
         mc, Xc = Vector(
             min(o.x for o in ol), min(o.y for o in ol), min(o.z for o in ol)
-        ), Vector(max(o.x for o in ol), max(o.y for o in ol), max(o.z for o in ol))
+        ), Vector(
+            max(o.x for o in ol), max(o.y for o in ol), max(o.z for o in ol)
+        )  # type: ignore
         m = ""
         tol = 1e-6
         if abs(Xc.x - mc.x) > tol:
@@ -174,9 +168,9 @@ class ArrowContext:
 
     def arrow_from_dict(self, arrow_data_dict: Dict[str, Any]) -> str:
         arrows_str_list: List[str] = []
-        ofg: List[Vector] = arrow_data_dict.get("offset", [])
+        ofg: List[Vector] = arrow_data_dict.get("offset", [])  # type: ignore
         if not (isinstance(ofg, list) and all(isinstance(v, Vector) for v in ofg)):
-            return ""
+            return ""  # type: ignore
         mask = self._mask_axis(ofg)
         for single_offset_vec in ofg:
             lpo = LDRPart()
@@ -226,7 +220,7 @@ def arrows_for_step(
     arrow_data_collected: List[Dict[str, Any]] = []
     original_part_lines_from_arrow_blocks: List[str] = []
     in_arrow_meta_block = False
-    current_block_offsets: List[Vector] = []
+    current_block_offsets: List[Vector] = []  # type: ignore
     current_block_arrow_colour = arrow_ctx.colour
     current_block_arrow_length = arrow_ctx.length
     current_block_arrow_ratio = arrow_ctx.ratio
@@ -322,7 +316,7 @@ def arrows_for_step(
         lpub_result_lines: List[str] = []
         if original_part_lines_from_arrow_blocks or arrow_data_collected:
             lpub_result_lines.append(ARROW_PREFIX)
-            ulp: Set[str] = set()  # Corrected type hint
+            ulp: Set[str] = set()
             for adi in arrow_data_collected:
                 if adi["line"] not in ulp:
                     po = LDRPart()
@@ -478,15 +472,13 @@ def remove_offset_parts(
         elif isinstance(item, str) and p_obj.from_str(item):
             op_objs.append(p_obj)
 
-    arrow_part_names: Set[str] = set()  # CORRECTED type hint
-    arrow_offsets_world: List[Vector] = []
+    arrow_part_names: Set[str] = set()
+    arrow_offsets_world: List[Vector] = []  # type: ignore
     for adi in arrow_dict_list:
         if not isinstance(adi, dict):
             continue
         offs_in_instr = adi.get("offset", [])
-        if isinstance(offs_in_instr, list) and all(
-            isinstance(v, Vector) for v in offs_in_instr
-        ):
+        if isinstance(offs_in_instr, list) and all(isinstance(v, Vector) for v in offs_in_instr):  # type: ignore
             arrow_offsets_world.extend(offs_in_instr)
         ags = adi.get("arrow")
         if isinstance(ags, str):

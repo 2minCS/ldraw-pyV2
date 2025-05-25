@@ -8,4 +8,5 @@ mypy
 numpy
 opencv-python
 nltk
+types-Pillow # For Pillow type stubs
 # coverage # Optional: for code coverage later

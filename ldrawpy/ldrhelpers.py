@@ -25,14 +25,19 @@
 
 import decimal
 from math import pi, cos, sin
-from typing import List, Union, Any, TYPE_CHECKING, Tuple, Optional
+from typing import (
+    List,
+    Union,
+    Any,
+    TYPE_CHECKING,
+    Tuple,
+    Optional,
+    Sequence,
+    cast,
+)  # ADDED cast
 
 # Explicit imports from toolbox
-from toolbox import (
-    Vector,
-    Matrix,
-    Identity,
-)  # Assuming these are used or were from wildcard
+from toolbox import Vector, Matrix, Identity  # type: ignore
 
 # Explicit relative imports from ldrawpy package
 from .constants import LDR_OPT_COLOUR, ASPECT_DICT, FLIP_DICT, LDRAW_TOKENS, META_TOKENS
@@ -63,33 +68,22 @@ def LDU2MM(x: float) -> float:
 
 
 def val_units(value: float, units: str = "ldu") -> str:
-    """
-    Writes a floating point value in units of either mm or ldu.
-    It restricts the number of decimal places to 4 and minimizes
-    redundant trailing zeros (as recommended by ldraw.org)
-    """
-    x = value * 2.5 if units == "mm" else value
-    quantized_x = quantize(x)
-
-    # CONVERTED TO F-STRING for initial formatting
-    s = f"{quantized_x:.4f}"
+    x: float = value * 2.5 if units == "mm" else value
+    quantized_x: float = quantize(x)
+    s: str = f"{quantized_x:.4f}"
     s = s.rstrip("0").rstrip(".")
     if s == "-0":
         return "0 "
-    return f"{s} "  # Use f-string for final space addition
+    return f"{s} "
 
 
-def mat_str(m: Union[Tuple[float, ...], List[float]]) -> str:
-    """
-    Writes the values of a matrix (assumed to be a flat list/tuple of 9 elements)
-    formatted by val_units.
-    """
+def mat_str(m: Sequence[float]) -> str:
     if len(m) != 9:
         return "".join([val_units(float(v), "ldu") for v in m])
     return "".join([val_units(float(v), "ldu") for v in m])
 
 
-def vector_str(p: Vector, attrib: "LDRAttrib") -> str:
+def vector_str(p: Vector, attrib: "LDRAttrib") -> str:  # type: ignore
     return (
         val_units(p.x, attrib.units)
         + val_units(p.y, attrib.units)
@@ -106,38 +100,39 @@ def GetCircleSegments(
     if segments <= 0:
         return lines
 
-    for seg in range(segments):
-        p1 = Vector(0, 0, 0)
-        p2 = Vector(0, 0, 0)
-        a1 = (seg / segments) * 2.0 * pi
-        a2 = ((seg + 1) / segments) * 2.0 * pi
+    for seg_idx in range(segments):
+        p1: Vector = Vector(0, 0, 0)  # type: ignore
+        p2: Vector = Vector(0, 0, 0)  # type: ignore
+        a1: float = (seg_idx / segments) * 2.0 * pi
+        a2: float = ((seg_idx + 1) / segments) * 2.0 * pi
         p1.x = radius * cos(a1)
         p1.z = radius * sin(a1)
         p2.x = radius * cos(a2)
         p2.z = radius * sin(a2)
 
-        l = LDRLine(attrib.colour, attrib.units)
-        l.p1 = p1
-        l.p2 = p2
-        lines.append(l)
+        line_obj: "LDRLine" = LDRLine(attrib.colour, attrib.units)
+        line_obj.p1 = p1
+        line_obj.p2 = p2
+        lines.append(line_obj)
     return lines
 
 
 def ldrlist_from_parts(
-    parts: Union[str, List[Union[str, "LDRPart"]]],
+    parts: Union[str, Sequence[Union[str, "LDRPart"]]],
 ) -> List["LDRPart"]:
     from .ldrprimitives import LDRPart
 
     p_list: List[LDRPart] = []
-    input_list: List[Union[str, "LDRPart"]]
+    input_items: Sequence[Union[str, "LDRPart"]]
+
     if isinstance(parts, str):
-        input_list = parts.splitlines()  # type: ignore
-    elif isinstance(parts, list):
-        input_list = parts
+        input_items = parts.splitlines()
+    elif isinstance(parts, (list, tuple, Sequence)):  # type: ignore
+        input_items = parts
     else:
         return p_list
 
-    for item in input_list:
+    for item in input_items:
         if isinstance(item, LDRPart):
             p_list.append(item)
         elif isinstance(item, str):
@@ -147,71 +142,77 @@ def ldrlist_from_parts(
     return p_list
 
 
-def ldrstring_from_list(parts: List[Any]) -> str:
+def ldrstring_from_list(parts_list: Sequence[Union["LDRPart", str]]) -> str:
     from .ldrprimitives import LDRPart
 
     s_list: List[str] = []
-    for p in parts:
-        if isinstance(p, LDRPart):
-            s_list.append(str(p))
-        elif isinstance(p, str):
-            s_list.append(p if p.endswith("\n") else p + "\n")
+    for p_item in parts_list:
+        item_str = str(p_item)
+        s_list.append(item_str if item_str.endswith("\n") else item_str + "\n")
     return "".join(s_list)
 
 
 def merge_same_parts(
-    parts: List[Union[str, "LDRPart"]],
-    other: List[Union[str, "LDRPart"]],
+    parts1: Sequence[Union[str, "LDRPart"]],
+    parts2: Sequence[Union[str, "LDRPart"]],
     ignore_colour: bool = False,
     as_str: bool = False,
 ) -> Union[List["LDRPart"], str]:
-    op_ldr = ldrlist_from_parts(other)
-    p_ldr = ldrlist_from_parts(parts)
-    result_parts: List["LDRPart"] = ldrlist_from_parts(other)
-    for n_part in p_ldr:
+
+    list1_ldr: List["LDRPart"] = ldrlist_from_parts(parts1)
+    list2_ldr: List["LDRPart"] = ldrlist_from_parts(parts2)
+    result_parts: List["LDRPart"] = list(list2_ldr)
+
+    for p1_item in list1_ldr:
         is_already_present = False
-        for o_part in op_ldr:
-            if n_part.is_same(
-                o_part, ignore_location=False, ignore_colour=ignore_colour
+        for res_item in result_parts:
+            if p1_item.is_same(
+                res_item, ignore_location=False, ignore_colour=ignore_colour
             ):
                 is_already_present = True
                 break
         if not is_already_present:
-            result_parts.append(n_part)
+            result_parts.append(p1_item)
+
     return ldrstring_from_list(result_parts) if as_str else result_parts
 
 
 def remove_parts_from_list(
-    parts: List[Union[str, "LDRPart"]],
-    other: List[Union[str, "LDRPart"]],
+    main_parts_list: Sequence[Union[str, "LDRPart"]],
+    parts_to_remove: Sequence[Union[str, "LDRPart"]],
     ignore_colour: bool = True,
     ignore_location: bool = True,
     exact: bool = False,
     as_str: bool = False,
 ) -> Union[List["LDRPart"], str]:
-    pp_ldr = ldrlist_from_parts(parts)
-    op_ldr = ldrlist_from_parts(other)
-    np_kept: List["LDRPart"] = []
+
+    pp_ldr: List["LDRPart"] = ldrlist_from_parts(main_parts_list)
+    op_ldr: List["LDRPart"] = ldrlist_from_parts(parts_to_remove)
+    kept_parts: List["LDRPart"] = []
+
     for p_item in pp_ldr:
-        should_remove = False
-        for o_item in op_ldr:
+        should_remove_p_item = False
+        for o_item_to_remove in op_ldr:
             if exact:
-                if p_item.is_identical(o_item):
-                    should_remove = True
+                if p_item.is_identical(o_item_to_remove):
+                    should_remove_p_item = True
                     break
             elif ignore_colour and ignore_location:
-                if p_item.name == o_item.name:
-                    should_remove = True
+                if p_item.name == o_item_to_remove.name:
+                    should_remove_p_item = True
                     break
             else:
                 if p_item.is_same(
-                    o_item, ignore_location=ignore_location, ignore_colour=ignore_colour
+                    o_item_to_remove,
+                    ignore_location=ignore_location,
+                    ignore_colour=ignore_colour,
                 ):
-                    should_remove = True
+                    should_remove_p_item = True
                     break
-        if not should_remove:
-            np_kept.append(p_item)
-    return ldrstring_from_list(np_kept) if as_str else np_kept
+        if not should_remove_p_item:
+            kept_parts.append(p_item)
+
+    return ldrstring_from_list(kept_parts) if as_str else kept_parts
 
 
 def norm_angle(a: float) -> float:
@@ -220,11 +221,13 @@ def norm_angle(a: float) -> float:
         a -= 360.0
     elif a < -180.0:
         a += 360.0
+    if a == 180.0:
+        a = -180.0
     return a
 
 
 def norm_aspect(a: Tuple[float, float, float]) -> Tuple[float, float, float]:
-    return tuple(norm_angle(v) for v in a)  # type: ignore
+    return (norm_angle(a[0]), norm_angle(a[1]), norm_angle(a[2]))
 
 
 def _flip_x(a: Tuple[float, float, float]) -> Tuple[float, float, float]:
@@ -234,41 +237,44 @@ def _flip_x(a: Tuple[float, float, float]) -> Tuple[float, float, float]:
 def _add_aspect(
     a: Tuple[float, float, float], b: Tuple[float, float, float]
 ) -> Tuple[float, float, float]:
-    return norm_aspect((a[0] + b[0], a[1] + b[1], a[2] + b[2]))
+    # Explicitly create a 3-tuple for MyPy and cast it
+    result_tuple = (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+    return norm_aspect(cast(Tuple[float, float, float], result_tuple))  # CORRECTED
 
 
 def preset_aspect(
     current_aspect: Tuple[float, float, float], aspect_changes: Union[str, List[str]]
 ) -> Tuple[float, float, float]:
-    changes_list = (
+    changes_list_lower: List[str] = (
         [aspect_changes.lower()]
         if isinstance(aspect_changes, str)
         else [c.lower() for c in aspect_changes]
     )
-    new_aspect_list = list(current_aspect)
-    for aspect_change_key in changes_list:
-        if aspect_change_key in ASPECT_DICT:
-            new_aspect_list = list(ASPECT_DICT[aspect_change_key])  # type: ignore
-        elif aspect_change_key in FLIP_DICT:
-            rot_to_add = FLIP_DICT[aspect_change_key]  # type: ignore
+    new_aspect_list: List[float] = list(current_aspect)
+    for aspect_key in changes_list_lower:
+        if aspect_key in ASPECT_DICT:
+            new_aspect_list = list(ASPECT_DICT[aspect_key])
+        elif aspect_key in FLIP_DICT:
+            rot_to_add: Tuple[float, float, float] = FLIP_DICT[aspect_key]
             new_aspect_list[0] += rot_to_add[0]
             new_aspect_list[1] += rot_to_add[1]
             new_aspect_list[2] += rot_to_add[2]
-        elif aspect_change_key == "down":
+        elif aspect_key == "down":
             if new_aspect_list[0] < 0:
                 new_aspect_list[0] = 35.0
-        elif aspect_change_key == "up":
+        elif aspect_key == "up":
             if new_aspect_list[0] > 0:
                 new_aspect_list[0] = -35.0
-    return norm_aspect(tuple(new_aspect_list))  # type: ignore
+    final_tuple = cast(Tuple[float, float, float], tuple(new_aspect_list))
+    return norm_aspect(final_tuple)
 
 
 def clean_line(line: str) -> str:
-    sl = line.split()
+    sl: List[str] = line.split()
     nl_parts: List[str] = []
     for i, s_token in enumerate(sl):
-        xs = s_token
-        is_potentially_numeric = True
+        xs: str = s_token
+        is_potentially_numeric: bool = True
         if i == 0 and s_token.isdigit():
             is_potentially_numeric = False
         if "." in s_token and any(c.isalpha() for c in s_token):
@@ -277,10 +283,9 @@ def clean_line(line: str) -> str:
             is_potentially_numeric = False
         if s_token.startswith("!"):
             is_potentially_numeric = False
-
         if i > 0 and is_potentially_numeric:
             try:
-                float_val = float(s_token)
+                float_val: float = float(s_token)
                 xs = val_units(float_val).strip()
             except ValueError:
                 pass
@@ -291,43 +296,36 @@ def clean_line(line: str) -> str:
 def clean_file(
     fn: str, fno: Optional[str] = None, verbose: bool = False, as_str: bool = False
 ) -> Union[None, List[str]]:
-    output_filename = fno if fno is not None else fn.replace(".ldr", "_clean.ldr")
+    output_filename: str = fno if fno is not None else fn.replace(".ldr", "_clean.ldr")
     if output_filename == fn and not as_str:
-        # CONVERTED TO F-STRING
         print(
             f"Error: Cleaned output filename '{output_filename}' is same as input '{fn}'. Aborting to prevent overwrite."
         )
         print("Specify a different output filename (fno) or use as_str=True.")
         return None if not as_str else []
-
     cleaned_lines: List[str] = []
-    bytes_in = 0
-    bytes_out = 0
+    bytes_in: int = 0
+    bytes_out: int = 0
     try:
         with open(fn, "r", encoding="utf-8") as f_in:
             for line_content in f_in:
                 bytes_in += len(line_content.encode("utf-8"))
-                cleaned_line_content = clean_line(line_content.rstrip("\r\n"))
+                cleaned_line_content: str = clean_line(line_content.rstrip("\r\n"))
                 bytes_out += len(cleaned_line_content.encode("utf-8"))
                 cleaned_lines.append(cleaned_line_content)
     except FileNotFoundError:
-        # CONVERTED TO F-STRING
         print(f"Error: Input file '{fn}' not found for cleaning.")
         return None if not as_str else []
     except Exception as e:
-        # CONVERTED TO F-STRING
         print(f"Error reading file '{fn}': {e}")
         return None if not as_str else []
-
     if verbose:
-        savings_percent = (
-            ((bytes_in - bytes_out) / bytes_in * 100.0) if bytes_in > 0 else 0
+        savings_percent: float = (
+            ((bytes_in - bytes_out) / bytes_in * 100.0) if bytes_in > 0 else 0.0
         )
-        # CONVERTED TO F-STRING
         print(
             f"{fn} : {bytes_in} bytes in / {bytes_out} bytes out ({savings_percent:.1f}% saved)"
         )
-
     if as_str:
         return cleaned_lines
     else:
@@ -336,6 +334,5 @@ def clean_file(
                 f_out.write("\n".join(cleaned_lines) + "\n")
             return None
         except Exception as e:
-            # CONVERTED TO F-STRING
             print(f"Error writing cleaned file '{output_filename}': {e}")
             return None

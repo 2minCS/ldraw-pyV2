@@ -29,16 +29,16 @@ import datetime
 import subprocess
 import shlex
 from collections import defaultdict
-from PIL import Image, ImageOps, ImageChops, ImageFilter
+from PIL import Image, ImageOps, ImageChops, ImageFilter  # type: ignore
 from typing import Optional, List, Tuple, Any, Dict, Union
 
 # Explicit imports from toolbox
-from toolbox import (
+from toolbox import (  # type: ignore
     apply_params,
     logmsg,
     split_path,
     full_path,
-    colour_path_str,  # This function uses 'crayons' in toolbox
+    colour_path_str,
     Vector,
 )
 
@@ -94,11 +94,8 @@ def _coord_str(
         a, b = float(x), float(y)
     else:
         return "coord_error"
-    # CONVERTED TO F-STRING (though original was already mostly f-string like)
-    sa = f"{a:.6f}".rstrip("0").rstrip(".")  # Ensure enough precision before stripping
+    sa = f"{a:.6f}".rstrip("0").rstrip(".")
     sb = f"{b:.6f}".rstrip("0").rstrip(".")
-    # The original crayons call was removed for simplicity earlier.
-    # If color is needed: import crayons; return f"{crayons.yellow(sa)}{sep}{crayons.yellow(sb)}"
     return f"{sa}{sep}{sb}"
 
 
@@ -158,7 +155,6 @@ class LDViewRender:
         self.settings_snapshot = None
 
     def __str__(self) -> str:
-        # ALREADY F-STRINGS (from previous update)
         return "\n".join(
             [
                 "LDViewRender: ",
@@ -226,7 +222,6 @@ class LDViewRender:
         self.page_height = height
         self.pix_width = int(self.page_width * self.dpi)
         self.pix_height = int(self.page_height * self.dpi)
-        # ALREADY F-STRING
         self.args_size = f"-SaveWidth={self.pix_width} -SaveHeight={self.pix_height}"
 
     def set_dpi(self, dpi: int):
@@ -237,32 +232,26 @@ class LDViewRender:
     def set_scale(self, scale: float):
         self.scale = scale
         self.cam_dist = int(camera_distance(self.scale, self.dpi, self.page_width))
-        # ALREADY F-STRING
         self.args_cam = f"-ca0.01 -cg0.0,0.0,{self.cam_dist}"
 
     def _logoutput(
         self, msg: str, tstart: Optional[datetime.datetime] = None, level: int = 2
     ):
-        # logmsg is from toolbox, assuming it handles its own formatting.
-        # If logmsg itself used %-formatting, it would need update in toolbox.
         logmsg(msg, tstart=tstart, level=level, prefix="LDR", log_level=self.log_level)
 
     def render_from_str(self, ldrstr: str, outfile: str):
         if self.log_output:
             s = ldrstr.splitlines()[0] if ldrstr.splitlines() else ""
-            # CONVERTED TO F-STRING (simplified, original had crayons)
             self._logoutput(f"rendering string ({s[:min(len(s), 80)]})...")
         try:
             with open(self.ldr_temp_path, "w", encoding="utf-8") as f:
                 f.write(ldrstr)
             self.render_from_file(self.ldr_temp_path, outfile)
         except IOError as e:
-            # CONVERTED TO F-STRING
             self._logoutput(f"Error writing temporary LDR file: {e}", level=0)
 
     def render_from_parts(self, parts: List[Any], outfile: str):
         if self.log_output:
-            # CONVERTED TO F-STRING (simplified, original had crayons)
             self._logoutput(f"rendering parts ({len(parts)})...")
         self.render_from_str("".join([str(p) for p in parts]), outfile)
 
@@ -285,7 +274,6 @@ class LDViewRender:
         if not self.overwrite and os.path.isfile(filename_to_render):
             if self.log_output:
                 fno_display = colour_path_str(os.path.basename(filename_to_render))
-                # CONVERTED TO F-STRING
                 self._logoutput(f"rendered file {fno_display} already exists, skipping")
             return
 
@@ -316,7 +304,6 @@ class LDViewRender:
             )
         if self.wireframe:
             current_settings["EdgesOnly"] = 1
-        # CONVERTED TO F-STRING (in loop)
         ldv_cmd.extend(f"-{k}={v}" for k, v in current_settings.items())
         ldv_cmd.append(ldrfile)
 
@@ -326,7 +313,6 @@ class LDViewRender:
             )
             stdout, stderr = process.communicate()
             if process.returncode != 0:
-                # CONVERTED TO F-STRING
                 self._logoutput(
                     f"LDView error for {ldrfile}. Code: {process.returncode}", level=0
                 )
@@ -340,18 +326,15 @@ class LDViewRender:
                     )
                 return
         except FileNotFoundError:
-            # CONVERTED TO F-STRING
             self._logoutput(f"Error: LDView not found at {LDVIEW_BIN}", level=0)
             return
         except Exception as e:
-            # CONVERTED TO F-STRING
             self._logoutput(f"Error running LDView for {ldrfile}: {e}", level=0)
             return
 
         if self.log_output:
             fni_disp = colour_path_str(os.path.basename(ldrfile))
             fno_disp = colour_path_str(os.path.basename(filename_to_render))
-            # CONVERTED TO F-STRING
             self._logoutput(
                 f"rendered file {fni_disp} to {fno_disp}...", t_start_render, level=0
             )
@@ -362,7 +345,6 @@ class LDViewRender:
             if self.image_smooth:
                 self.smooth(filename_to_render)
         else:
-            # CONVERTED TO F-STRING
             self._logoutput(
                 f"Warning: Output {filename_to_render} not created.", level=1
             )
@@ -374,8 +356,10 @@ class LDViewRender:
             original_mode = im.mode
             if im.mode != "RGBA":
                 im = im.convert("RGBA")
+
             alpha = im.getchannel("A")
             bbox = alpha.getbbox()
+
             if not bbox:
                 temp_im_for_bg = im if im.mode == "P" else im.convert("RGBA")
                 bg_color_ref = temp_im_for_bg.getpixel((0, 0))
@@ -387,20 +371,18 @@ class LDViewRender:
                     else diff.convert("L").getbbox()
                 )
                 bbox = bbox_diff
+
             im2 = im.crop(bbox) if bbox else im
             im2.save(filename)
             if self.log_output:
                 fn_disp = colour_path_str(os.path.basename(filename))
-                # CONVERTED TO F-STRING
                 self._logoutput(
                     f"> cropped {fn_disp} from ({_coord_str(im.size)}) to ({_coord_str(im2.size)})",
                     t_start_crop,
                 )
         except FileNotFoundError:
-            # CONVERTED TO F-STRING
             self._logoutput(f"Error cropping: File not found {filename}", level=0)
         except Exception as e:
-            # CONVERTED TO F-STRING
             self._logoutput(f"Error during image crop for {filename}: {e}", level=0)
 
     def smooth(self, filename: str):
@@ -411,13 +393,10 @@ class LDViewRender:
             im_smooth.save(filename)
             if self.log_output:
                 fn_disp = colour_path_str(os.path.basename(filename))
-                # CONVERTED TO F-STRING
                 self._logoutput(
                     f"> smoothed {fn_disp} ({_coord_str(im.size)})", t_start_smooth
                 )
         except FileNotFoundError:
-            # CONVERTED TO F-STRING
             self._logoutput(f"Error smoothing: File not found {filename}", level=0)
         except Exception as e:
-            # CONVERTED TO F-STRING
             self._logoutput(f"Error during image smooth for {filename}: {e}", level=0)

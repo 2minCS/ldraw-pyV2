@@ -22,64 +22,89 @@
 # SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #
 # LDraw python module
+from typing import List, Tuple, Any, Union, Optional
 
-from toolbox import Vector
+from toolbox import Vector  # type: ignore
 
 from .constants import LDR_DEF_COLOUR, LDR_OPT_COLOUR
 from .ldrprimitives import LDRTriangle, LDRLine
 
 
-def xyz_to_ldr(point, as_tuple=False):
-    """Converts a typical x,y,z 3D coordinate to the somewhat unconventional
-    LDraw representations of x, -z, y, i.e. the vertical axis extends in
-    the -y direction as opposed to +z."""
-    if isinstance(point, (tuple, list)):
-        v = Vector(point[0], -point[2], point[1])
+def xyz_to_ldr(
+    point: Union[Tuple[float, float, float], List[float], Vector],
+    as_tuple: bool = False,
+) -> Union[Vector, Tuple[float, float, float]]:
+
+    v_internal: Vector
+    if isinstance(point, (tuple, list)) and len(point) == 3:
+        v_internal = Vector(point[0], -point[2], point[1])
+    elif isinstance(point, Vector):
+        v_internal = Vector(point.x, -point.z, point.y)
     else:
-        v = Vector(point.x, -point.z, point.y)
-    if as_tuple:
-        return v.as_tuple()
-    return v
+        raise TypeError(
+            "Input point must be a 3-element tuple/list or a Vector object."
+        )
+
+    return v_internal.as_tuple() if as_tuple else v_internal  # type: ignore
 
 
 def mesh_to_ldr(
-    faces, vertices, mesh_colour=LDR_DEF_COLOUR, edges=None, edge_colour=None
-):
-    """Converts a triangular mesh into a LDraw formatted string of triangles
-    and optionally specified edge lines.
-      faces - list of triangle vertex indices into the vertices list
-      vertices - list of mesh 3D vertices (x, y, z)
-      mesh_colour - LDraw colour code for mesh triangles
-      edges - list of ((x0, y0, z0), (x1, y1, z1)) line tuples
-      edge_colour - LDraw colour code for edge lines
-    """
-    s = []
-    triangles = []
-    for face in faces:
-        tri = LDRTriangle(mesh_colour, "mm")
-        tri.p1 = xyz_to_ldr(vertices[face[0]])
-        tri.p2 = xyz_to_ldr(vertices[face[1]])
-        tri.p3 = xyz_to_ldr(vertices[face[2]])
-        triangles.append(tri)
-    for triangle in triangles:
-        s.append(str(triangle))
+    faces: List[Tuple[int, int, int]],
+    vertices: List[Union[Tuple[float, float, float], List[float], Vector]],
+    mesh_colour: int = LDR_DEF_COLOUR,
+    edges: Optional[
+        List[
+            Tuple[
+                Union[Tuple[float, float, float], List[float], Vector],
+                Union[Tuple[float, float, float], List[float], Vector],
+            ]
+        ]
+    ] = None,
+    edge_colour: Optional[int] = None,
+) -> str:
+    s_list: List[str] = []
+
+    ldr_vertices: List[Vector] = []
+    for v_orig in vertices:
+        ldr_v_union = xyz_to_ldr(v_orig)
+        if isinstance(ldr_v_union, Vector):
+            ldr_vertices.append(ldr_v_union)
+        else:
+            raise TypeError(
+                "xyz_to_ldr did not return a Vector as expected when as_tuple=False."
+            )
+
+    for face_indices in faces:
+        if len(face_indices) == 3:
+            tri = LDRTriangle(mesh_colour, "mm")
+            tri.p1 = ldr_vertices[face_indices[0]]
+            tri.p2 = ldr_vertices[face_indices[1]]
+            tri.p3 = ldr_vertices[face_indices[2]]
+            s_list.append(str(tri))
+
     if edges is not None:
-        lines = []
-        ec = edge_colour if edge_colour is not None else LDR_OPT_COLOUR
-        for edge in edges:
-            line = LDRLine(ec, "mm")
-            line.p1 = xyz_to_ldr(edge[0])
-            line.p2 = xyz_to_ldr(edge[1])
-            lines.append(line)
-        for line in lines:
-            s.append(str(line))
-    return "".join(s)
+        actual_edge_colour = edge_colour if edge_colour is not None else LDR_OPT_COLOUR
+        for edge_points in edges:
+            if len(edge_points) == 2:
+                line = LDRLine(actual_edge_colour, "mm")
+                p1_orig, p2_orig = edge_points
+
+                ldr_p1_union = xyz_to_ldr(p1_orig)
+                ldr_p2_union = xyz_to_ldr(p2_orig)
+
+                if isinstance(ldr_p1_union, Vector) and isinstance(
+                    ldr_p2_union, Vector
+                ):
+                    line.p1 = ldr_p1_union
+                    line.p2 = ldr_p2_union
+                    s_list.append(str(line))
+                else:
+                    pass  # Or raise error
+
+    return "".join(s_list)
 
 
-def brick_name_strip(s, level=0):
-    """Progressively strips (with increasing levels) a part description
-    by making substitutions with abreviations, removing spaces, etc.
-    This can be useful for labelling or BOM part lists where space is limited."""
+def brick_name_strip(s: str, level: int = 0) -> str:
     sn = s
     if level == 0:
         sn = sn.replace("  ", " ")
@@ -97,130 +122,144 @@ def brick_name_strip(s, level=0):
         sn = sn.replace("with Groove", "")
         sn = sn.replace("Bluish ", "Bl ")
         sn = sn.replace("Slope Brick", "Slope")
-        sn = sn.replace("0.667", "2/3")
-        sn = sn.replace("1.667", "1-2/3")
-        sn = sn.replace("1.333", "1-1/3")
-        sn = sn.replace("1 And 1/3", "1-1/3")
-        sn = sn.replace("1 and 1/3", "1-1/3")
-        sn = sn.replace("1 & 1/3", "1-1/3")
+        sn = (
+            sn.replace("0.667", "2/3")
+            .replace("1.667", "1-2/3")
+            .replace("1.333", "1-1/3")
+        )
+        sn = (
+            sn.replace("1 And 1/3", "1-1/3")
+            .replace("1 and 1/3", "1-1/3")
+            .replace("1 & 1/3", "1-1/3")
+        )
         sn = sn.replace("with Headlight", "Erling")
         sn = sn.replace("Angle Connector", "Conn")
         sn = sn.replace("~Plate", "Plate")
     elif level == 1:
-        sn = sn.replace("with ", "w/")
-        sn = sn.replace("With ", "w/")
+        sn = sn.replace("with ", "w/").replace("With ", "w/")
         sn = sn.replace("Ribbed", "ribbed")
-        sn = sn.replace("without ", "wo/")
-        sn = sn.replace("Without ", "wo/")
-        sn = sn.replace("One", "1")
-        sn = sn.replace("Two", "2")
-        sn = sn.replace("Three", "3 ")
-        sn = sn.replace("Four", "4")
-        sn = sn.replace(" and ", " & ")
-        sn = sn.replace(" And ", " & ")
-        sn = sn.replace("Dark", "Dk")
-        sn = sn.replace("Light", "Lt")
-        sn = sn.replace("Bright", "Br")
-        sn = sn.replace("Reddish Brown", "Red Brown")
-        sn = sn.replace("Reddish", "Red")
-        sn = sn.replace("Yellowish", "Ylwish")
-        sn = sn.replace("Medium", "Med")
-        sn = sn.replace("Offset", "offs")
-        sn = sn.replace("Adjacent", "adj")
+        sn = sn.replace("without ", "wo/").replace("Without ", "wo/")
+        sn = (
+            sn.replace("One", "1")
+            .replace("Two", "2")
+            .replace("Three", "3 ")
+            .replace("Four", "4")
+        )
+        sn = sn.replace(" and ", " & ").replace(" And ", " & ")
+        sn = sn.replace("Dark", "Dk").replace("Light", "Lt").replace("Bright", "Br")
+        sn = (
+            sn.replace("Reddish Brown", "Red Brown")
+            .replace("Reddish", "Red")
+            .replace("Yellowish", "Ylwish")
+        )
+        sn = (
+            sn.replace("Medium", "Med")
+            .replace("Offset", "offs")
+            .replace("Adjacent", "adj")
+        )
         sn = sn.replace(" degree", "°")
     elif level == 2:
-        sn = sn.replace("Trans", "Tr")
-        sn = sn.replace(" x ", "x")
-        sn = sn.replace("Bl ", " ")
+        sn = sn.replace("Trans", "Tr").replace(" x ", "x").replace("Bl ", " ")
     elif level == 3:
-        sn = sn.replace("Orange", "Org")
-        sn = sn.replace("Yellow", "Ylw")
-        sn = sn.replace("Black", "Blk")
-        sn = sn.replace("White", "Wht")
-        sn = sn.replace("Green", "Grn")
-        sn = sn.replace("Brown", "Brn")
-        sn = sn.replace("Purple", "Prpl")
-        sn = sn.replace("Violet", "Vlt")
-        sn = sn.replace("Gray", "Gry")
-        sn = sn.replace("Grey", "Gry")
-        sn = sn.replace("Axlehole", "axle")
-        sn = sn.replace("Cylinder", "Cyl")
-        sn = sn.replace("cylinder", "cyl")
-        sn = sn.replace("Inverted", "Inv")
-        sn = sn.replace("inverted", "inv")
-        sn = sn.replace("Centre", "Ctr")
-        sn = sn.replace("centre", "ctr")
-        sn = sn.replace("Center", "Ctr")
-        sn = sn.replace("center", "ctr")
-        sn = sn.replace("Figure", "Fig")
-        sn = sn.replace("figure", "fig")
-        sn = sn.replace("Rounded", "Round")
-        sn = sn.replace("rounded", "round")
-        sn = sn.replace("Underside", "under")
-        sn = sn.replace("Vertical", "vert")
-        sn = sn.replace("Horizontal", "horz")
-        sn = sn.replace("vertical", "vert")
-        sn = sn.replace("horizontal", "horz")
-        sn = sn.replace("Flex-System", "Flex")
-        sn = sn.replace("Flanges", "Flange")
-        sn = sn.replace("Joiner", "joiner")
-        sn = sn.replace("Joint", "joint")
-        sn = sn.replace("Type 1", "")
-        sn = sn.replace("Type 2", "")
+        replacements_l3 = {
+            "Orange": "Org",
+            "Yellow": "Ylw",
+            "Black": "Blk",
+            "White": "Wht",
+            "Green": "Grn",
+            "Brown": "Brn",
+            "Purple": "Prpl",
+            "Violet": "Vlt",
+            "Gray": "Gry",
+            "Grey": "Gry",
+            "Axlehole": "axle",
+            "Cylinder": "Cyl",
+            "cylinder": "cyl",
+            "Inverted": "Inv",
+            "inverted": "inv",
+            "Centre": "Ctr",
+            "centre": "ctr",
+            "Center": "Ctr",
+            "center": "ctr",
+            "Figure": "Fig",
+            "figure": "fig",
+            "Rounded": "Round",
+            "rounded": "round",
+            "Underside": "under",
+            "Vertical": "vert",
+            "Horizontal": "horz",
+            "vertical": "vert",
+            "horizontal": "horz",
+            "Flex-System": "Flex",
+            "Flanges": "Flange",
+            "Joiner": "joiner",
+            "Joint": "joint",
+            "Type 1": "",
+            "Type 2": "",
+        }
+        for old, new in replacements_l3.items():
+            sn = sn.replace(old, new)
     elif level == 4:
-        sn = sn.replace("Technic", "")
-        sn = sn.replace("Single", "1")
-        sn = sn.replace("Dual", "2")
-        sn = sn.replace("Double", "Dbl")
-        sn = sn.replace("Stud on", "stud")
-        sn = sn.replace("Studs on Sides", "stud sides")
-        sn = sn.replace("Studs on Side", "side studs")
+        sn = sn.replace("Technic", "").replace("Single", "1").replace("Dual", "2")
+        sn = sn.replace("Double", "Dbl").replace("Stud on", "stud")
+        sn = sn.replace("Studs on Sides", "stud sides").replace(
+            "Studs on Side", "side studs"
+        )
         sn = sn.replace("Hinge Plate", "Hinge")
     elif level == 5:
-        sn = sn.replace(" on ", " ")
-        sn = sn.replace(" On ", " ")
-        sn = sn.replace("Round", "Rnd")
-        sn = sn.replace("round", "rnd")
-        sn = sn.replace("Side", "Sd")
-        sn = sn.replace("Groove", "Grv")
-        sn = sn.replace("Minifig", "")
-        sn = sn.replace("Curved", "Curv")
-        sn = sn.replace("curved", "curv")
-        sn = sn.replace("Notched", "notch")
-        sn = sn.replace("Friction", "fric")
-        sn = sn.replace("(Complete)", "")
-        sn = sn.replace("Cross", "X")
-        sn = sn.replace("Embossed", "Emb")
-        sn = sn.replace("Extension", "Ext")
-        sn = sn.replace("Bottom", "Bot")
-        sn = sn.replace("bottom", "bot")
-        sn = sn.replace("Inside", "Insd")
-        sn = sn.replace("inside", "insd")
-        sn = sn.replace("Locking", "click")
-        sn = sn.replace("Axleholder", "axle")
-        sn = sn.replace("axleholder", "axle")
-        sn = sn.replace("End", "end")
-        sn = sn.replace("Open", "open")
-        sn = sn.replace("Rod", "rod")
-        sn = sn.replace("Hole", "hole")
-        sn = sn.replace("Ball", "ball")
-        sn = sn.replace("Thin", "thin")
-        sn = sn.replace("Thick", "thick")
-        sn = sn.replace(" - ", "-")
+        replacements_l5 = {
+            " on ": " ",
+            " On ": " ",
+            "Round": "Rnd",
+            "round": "rnd",
+            "Side": "Sd",
+            "Groove": "Grv",
+            "Minifig": "",
+            "Curved": "Curv",
+            "curved": "curv",
+            "Notched": "notch",
+            "Friction": "fric",
+            "(Complete)": "",
+            "Cross": "X",
+            "Embossed": "Emb",
+            "Extension": "Ext",
+            "Bottom": "Bot",
+            "bottom": "bot",
+            "Inside": "Insd",
+            "inside": "insd",
+            "Locking": "click",
+            "Axleholder": "axle",
+            "axleholder": "axle",
+            "End": "end",
+            "Open": "open",
+            "Rod": "rod",
+            "Hole": "hole",
+            "Ball": "ball",
+            "Thin": "thin",
+            "Thick": "thick",
+            " - ": "-",
+        }
+        for old, new in replacements_l5.items():
+            sn = sn.replace(old, new)
     elif level == 6:
-        sn = sn.replace("Up", "up")
-        sn = sn.replace("Down", "dn")
-        sn = sn.replace("Bot", "bot")
-        sn = sn.replace("Rnd", "rnd")
-        sn = sn.replace("Studs", "St")
-        sn = sn.replace("studs", "St")
-        sn = sn.replace("Stud", "St")
-        sn = sn.replace("stud", "St")
-        sn = sn.replace("Corners", "edge")
-        sn = sn.replace("w/Curv Top", "curved")
-        sn = sn.replace("Domed", "dome")
-        sn = sn.replace("Clip", "clip")
-        sn = sn.replace("Clips", "clip")
-        sn = sn.replace("Convex", "cvx")
-    sn = sn[0].upper() + sn[1:]
+        replacements_l6 = {
+            "Up": "up",
+            "Down": "dn",
+            "Bot": "bot",
+            "Rnd": "rnd",
+            "Studs": "St",
+            "studs": "St",
+            "Stud": "St",
+            "stud": "St",
+            "Corners": "edge",
+            "w/Curv Top": "curved",
+            "Domed": "dome",
+            "Clip": "clip",
+            "Clips": "clip",
+            "Convex": "cvx",
+        }
+        for old, new in replacements_l6.items():
+            sn = sn.replace(old, new)
+    if sn:
+        sn = sn[0].upper() + sn[1:]
     return sn

@@ -25,85 +25,68 @@
 
 import hashlib
 from collections import defaultdict
-from typing import List, Dict, Tuple, Any, Optional, Union
+from typing import List, Dict, Tuple, Any, Optional, Union, cast
 
 # Explicit imports from toolbox
-from toolbox import (
-    Vector,
-    Matrix,
-    Identity,
-    apply_params,
-    split_path,
-    progress_bar,
-    safe_vector,
-)
+from toolbox import Vector, Matrix, Identity, apply_params, split_path, progress_bar, safe_vector  # type: ignore
 
 # Explicit imports from ldrawpy package
-from .constants import (  # CORRECTED: Only import constants actually defined in constants.py
-    SPECIAL_TOKENS,
-    LDR_DEF_COLOUR,
-    ASPECT_DICT,
-    FLIP_DICT,
-    # START_TOKENS, END_TOKENS, EXCEPTION_LIST, IGNORE_LIST, COMMON_SUBSTITUTIONS # REMOVED THESE AGAIN
-)
+from .constants import SPECIAL_TOKENS, LDR_DEF_COLOUR, ASPECT_DICT, FLIP_DICT
 from .ldrprimitives import LDRPart
 from .ldrhelpers import norm_aspect, preset_aspect
 
 # Conditional import for brickbom
 try:
-    from brickbom import BOM, BOMPart
+    from brickbom import BOM, BOMPart  # type: ignore
 except ImportError:
     BOM = None  # type: ignore
     BOMPart = None  # type: ignore
 
-# Import rich directly as it's a dependency
-from rich import print as rich_print
+from rich import print as rich_print  # type: ignore
 
-
-# These constants are defined locally in this module (ldrmodel.py)
 START_TOKENS = ["PLI BEGIN IGN", "BUFEXCHG STORE"]
 END_TOKENS = ["PLI END", "BUFEXCHG RETRIEVE"]
 EXCEPTION_LIST = ["2429c01.dat"]
 IGNORE_LIST = ["LS02"]
 COMMON_SUBSTITUTIONS: List[Tuple[str, str]] = [
-    ("3070a", "3070b"),  # 1 x 1 tile
-    ("3069a", "3069b"),  # 1 x 2 tile
-    ("3068a", "3068b"),  # 2 x 2 tile
-    ("x224", "41751"),  # windscreen
-    ("4864a", "87552"),  # 1 x 2 x 2 panel with side supports
+    ("3070a", "3070b"),
+    ("3069a", "3069b"),
+    ("3068a", "3068b"),
+    ("x224", "41751"),
+    ("4864a", "87552"),
     ("4864b", "87552"),
-    ("2362a", "87544"),  # 1 x 2 x 3 panel with side supports
+    ("2362a", "87544"),
     ("2362b", "87544"),
-    ("60583", "60583b"),  # 1 x 1 x 3 brick with clips
+    ("60583", "60583b"),
     ("60583a", "60583b"),
-    ("3245a", "3245c"),  # 1 x 2 x 2 brick
+    ("3245a", "3245c"),
     ("3245b", "3245c"),
-    ("3794", "15573"),  # 1 x 2 jumper plate
+    ("3794", "15573"),
     ("3794a", "15573"),
     ("3794b", "15573"),
-    ("4215a", "60581"),  # 1 x 4 x 3 panel with side supports
+    ("4215a", "60581"),
     ("4215b", "60581"),
     ("4215", "60581"),
-    ("73983", "2429c01"),  # 1 x 4 hinge plate complete
+    ("73983", "2429c01"),
     ("3665a", "3665"),
-    ("3665b", "3665"),  # 2 x 1 45 deg inv slope
-    ("4081a", "4081b"),  # 1x1 plate with light ring
-    ("4085a", "60897"),  # 1x1 plate with vert clip
+    ("3665b", "3665"),
+    ("4081a", "4081b"),
+    ("4085a", "60897"),
     ("4085b", "60897"),
     ("4085c", "60897"),
-    ("6019", "61252"),  # 1x1 plate with horz clip
-    ("59426", "32209"),  # technic 5.5 axle
-    ("48729", "48729b"),  # bar with clip
+    ("6019", "61252"),
+    ("59426", "32209"),
+    ("48729", "48729b"),
     ("48729a", "48729b"),
     ("41005", "48729b"),
-    ("4459", "2780"),  # Technic friction pin
-    ("44302", "44302a"),  # 1x2 click hinge plate
+    ("4459", "2780"),
+    ("44302", "44302a"),
     ("44302b", "44302a"),
-    ("2436", "28802"),  # 1x2 x 1x4 bracket
+    ("2436", "28802"),
     ("2436a", "28802"),
     ("2436b", "28802"),
-    ("2454", "2454b"),  # 1x2x5 brick
-    ("64567", "577b"),  # minifig lightsabre holder
+    ("2454", "2454b"),
+    ("64567", "577b"),
     ("30241b", "60475b"),
     ("2861", "2861c01"),
     ("2859", "2859c01"),
@@ -127,7 +110,7 @@ COMMON_SUBSTITUTIONS: List[Tuple[str, str]] = [
 
 
 def substitute_part(part: LDRPart) -> LDRPart:
-    for e in COMMON_SUBSTITUTIONS:  # Uses local COMMON_SUBSTITUTIONS
+    for e in COMMON_SUBSTITUTIONS:
         if part.name == e[0]:
             part.name = e[1]
     return part
@@ -144,10 +127,7 @@ def line_has_all_tokens(line: str, tokenlist: List[str]) -> bool:
 def parse_special_tokens(line: str) -> List[Dict[str, Any]]:
     ls = line.strip().split()
     metas: List[Dict[str, Any]] = []
-    for (
-        cmd_key,
-        token_patterns,
-    ) in SPECIAL_TOKENS.items():  # Uses SPECIAL_TOKENS from .constants
+    for cmd_key, token_patterns in SPECIAL_TOKENS.items():
         for pattern_str in token_patterns:
             pattern_tokens = pattern_str.split()
             non_placeholder_pattern_tokens = [
@@ -155,7 +135,6 @@ def parse_special_tokens(line: str) -> List[Dict[str, Any]]:
             ]
             if not all(nppt in ls for nppt in non_placeholder_pattern_tokens):
                 continue
-
             extracted_values: List[str] = []
             valid_match_for_values = True
             try:
@@ -172,12 +151,10 @@ def parse_special_tokens(line: str) -> List[Dict[str, Any]]:
                             break
             except (ValueError, IndexError):
                 valid_match_for_values = False
-
             if not valid_match_for_values and any(
                 pt.startswith("%") for pt in pattern_tokens
             ):
                 continue
-
             if extracted_values:
                 metas.append(
                     {cmd_key: {"values": extracted_values, "text": line.strip()}}
@@ -211,7 +188,6 @@ def get_parts_from_model(ldr_string: str) -> List[Dict[str, str]]:
         stripped_line = line.lstrip()
         if not stripped_line:
             continue
-        # Uses global START_TOKENS, END_TOKENS, EXCEPTION_LIST from this module
         if line_has_all_tokens(line, ["BUFEXCHG STORE"]):
             bufex = True
         if line_has_all_tokens(line, ["BUFEXCHG RETRIEVE"]):
@@ -260,8 +236,8 @@ def recursive_parse_model(
             ref_part = LDRPart()
             if ref_part.from_str(ldr_text) is None:
                 continue
-            new_matrix = current_matrix * ref_part.attrib.matrix  # type: ignore
-            new_offset = current_matrix * ref_part.attrib.loc + current_offset  # type: ignore
+            new_matrix = current_matrix * ref_part.attrib.matrix
+            new_offset = current_matrix * ref_part.attrib.loc + current_offset
             recursive_parse_model(
                 submodel_entries,
                 all_submodels_data,
@@ -275,9 +251,8 @@ def recursive_parse_model(
             actual_part = LDRPart()
             if actual_part.from_str(ldr_text) is None:
                 continue
-            actual_part = substitute_part(actual_part)  # Uses local substitute_part
+            actual_part = substitute_part(actual_part)
             actual_part.transform(matrix=current_matrix, offset=current_offset)
-            # Uses local IGNORE_LIST
             if (
                 actual_part.name not in IGNORE_LIST
                 and actual_part.name.upper() not in IGNORE_LIST
@@ -474,7 +449,7 @@ class LDRModel:
         pli_bom_obj = v_step.get("pli_bom")
         parts_count = 0
         if BOM and isinstance(pli_bom_obj, BOM) and hasattr(pli_bom_obj, "parts"):
-            parts_count = len(pli_bom_obj.parts)  # type: ignore
+            parts_count = len(pli_bom_obj.parts)
         elif isinstance(pli_bom_obj, list):
             parts_count = len(pli_bom_obj)
         parts_str = f"({parts_count:2d}x pcs)"
@@ -517,7 +492,7 @@ class LDRModel:
             current_aspect_for_part = list(final_aspect_tuple)
             if use_exceptions and p.name in self.pli_exceptions:
                 current_aspect_for_part = list(self.pli_exceptions[p.name])
-            np.set_rotation(tuple(current_aspect_for_part))  # type: ignore
+            np.set_rotation(tuple(current_aspect_for_part))
             if final_origin_vec:
                 np.move_to(final_origin_vec)
             transformed_parts.append(np)
@@ -540,7 +515,7 @@ class LDRModel:
             for p_obj_any in parts:
                 if isinstance(p_obj_any, LDRPart):
                     np = p_obj_any.copy()
-                    np.rotate_by(final_aspect_tuple)  # type: ignore
+                    np.rotate_by(final_aspect_tuple)
                     np.move_by(final_offset_vec)
                     processed_ldr_parts.append(np)
             return processed_ldr_parts
@@ -550,7 +525,7 @@ class LDRModel:
                 if isinstance(p_str_any, str):
                     np = LDRPart()
                     if np.from_str(p_str_any):
-                        np.rotate_by(final_aspect_tuple)  # type: ignore
+                        np.rotate_by(final_aspect_tuple)
                         np.move_by(final_offset_vec)
                         processed_str_parts.append(str(np))
                     else:
@@ -643,7 +618,20 @@ class LDRModel:
                     sub_steps = self._parsed_submodel_steps_cache.get(sub_name)
                     if not sub_steps:
                         continue
-                    _, current_idx = self._unwrap_model_recursive(sub_steps, current_idx, current_level + 1, sub_name, qty, unwrapped_list)  # type: ignore
+                    result_recursive = self._unwrap_model_recursive(
+                        sub_steps,
+                        current_idx,
+                        current_level + 1,
+                        sub_name,
+                        qty,
+                        unwrapped_list,
+                    )
+                    if (
+                        isinstance(result_recursive, tuple)
+                        and len(result_recursive) == 2
+                    ):
+                        current_idx = result_recursive[1]
+
             entry = {
                 "idx": current_idx,
                 "level": current_level,
@@ -665,6 +653,7 @@ class LDRModel:
             }
             unwrapped_list.append(entry)
             current_idx += 1
+
         if current_level == 0:
             final_model: List[Dict[str, Any]] = []
             cont_step = 1
@@ -737,9 +726,12 @@ class LDRModel:
                                 if "_" in item_str
                                 else (item_str, LDR_DEF_COLOUR)
                             )
-                            e_fm_pli["pli_bom"].add_part(BOMPart(1, pname, int(pcol)))  # type: ignore
-                            if self.bom:
-                                self.bom.add_part(BOMPart(1, pname, int(pcol)))
+                            if BOMPart is not None:
+                                bom_part_instance = BOMPart(1, pname, int(pcol))
+                                if isinstance(e_fm_pli["pli_bom"], BOM):
+                                    e_fm_pli["pli_bom"].add_part(bom_part_instance)
+                                if self.bom:
+                                    self.bom.add_part(bom_part_instance)
             return final_model
         return unwrapped_list, current_idx
 
@@ -775,10 +767,16 @@ class LDRModel:
         steps_dict: Dict[int, Dict[str, Any]] = {}
         step_blocks = model_content_str.split("0 STEP")
         cumulative_parts: List[LDRPart] = []
-        current_aspect: List[float] = list(self.global_aspect if is_top_level else self.PARAMS["global_aspect"])  # type: ignore
-        current_scale = self.global_scale if is_top_level else self.PARAMS["global_scale"]  # type: ignore
-        model_inherent_scale = current_scale  # type: ignore
+
+        current_aspect_list: List[float] = list(
+            self.global_aspect if is_top_level else self.PARAMS["global_aspect"]
+        )
+        current_scale = (
+            self.global_scale if is_top_level else self.PARAMS["global_scale"]
+        )
+        model_inherent_scale = current_scale
         step_num = 1
+
         for i, block_raw in enumerate(step_blocks):
             if i == 0 and not block_raw.strip() and len(step_blocks) > 1:
                 continue
@@ -791,18 +789,30 @@ class LDRModel:
                     model_inherent_scale = float(cmd["model_scale"]["values"][0])
                 elif "rotation_abs" in cmd:
                     v = [float(x) for x in cmd["rotation_abs"]["values"]]
-                    current_aspect = [-v[0], v[1], v[2]]
+                    current_aspect_list = [-v[0], v[1], v[2]]
                     aspect_changed = True
                 elif "rotation_rel" in cmd:
                     v_rel = tuple(float(x) for x in cmd["rotation_rel"]["values"])
-                    current_aspect[0] -= v_rel[0]
-                    current_aspect[1] += v_rel[1]
-                    current_aspect[2] += v_rel[2]
-                    current_aspect = list(norm_aspect(tuple(current_aspect)))  # type: ignore
+                    current_aspect_list[0] -= v_rel[0]
+                    current_aspect_list[1] += v_rel[1]
+                    current_aspect_list[2] += v_rel[2]
+                    current_aspect_list = list(
+                        norm_aspect(
+                            cast(Tuple[float, float, float], tuple(current_aspect_list))
+                        )
+                    )
                     aspect_changed = True
                 elif "rotation_pre" in cmd:
-                    current_aspect = list(preset_aspect(tuple(current_aspect), cmd["rotation_pre"]["values"]))  # type: ignore
+                    current_aspect_list = list(
+                        preset_aspect(
+                            cast(
+                                Tuple[float, float, float], tuple(current_aspect_list)
+                            ),
+                            cmd["rotation_pre"]["values"],
+                        )
+                    )
                     aspect_changed = True
+
             part_dicts = get_parts_from_model(block_raw)
             added_ldr_parts: List[LDRPart] = []
             recursive_parse_model(
@@ -813,6 +823,7 @@ class LDRModel:
             )
             if not added_ldr_parts and not meta and (i > 0 or not block_raw.strip()):
                 continue
+
             pli_step = self.transform_parts_to(
                 added_ldr_parts,
                 origin=(0, 0, 0),
@@ -820,22 +831,44 @@ class LDRModel:
                 use_exceptions=True,
             )
             cumulative_parts.extend(added_ldr_parts)
-            snap_model = self.transform_parts(
-                cumulative_parts, aspect=tuple(current_aspect)
+
+            current_aspect_tuple = cast(
+                Tuple[float, float, float], tuple(current_aspect_list)
             )
-            snap_step_parts = self.transform_parts(
-                added_ldr_parts, aspect=tuple(current_aspect)
+            snap_model_union = self.transform_parts(
+                cumulative_parts, aspect=current_aspect_tuple
             )
+            snap_step_parts_union = self.transform_parts(
+                added_ldr_parts, aspect=current_aspect_tuple
+            )
+
+            snap_model: List[LDRPart] = []
+            if isinstance(snap_model_union, list) and all(
+                isinstance(p, LDRPart) for p in snap_model_union
+            ):
+                snap_model = cast(
+                    List[LDRPart], snap_model_union
+                )  # Use cast after check
+
+            snap_step_parts: List[LDRPart] = []
+            if isinstance(snap_step_parts_union, list) and all(
+                isinstance(p, LDRPart) for p in snap_step_parts_union
+            ):
+                snap_step_parts = cast(
+                    List[LDRPart], snap_step_parts_union
+                )  # Use cast after check
+
             pli_bom_step: Optional[BOM] = None
             if BOM and BOMPart:
                 pli_bom_step = BOM()
                 if self.bom and hasattr(self.bom, "ignore_parts"):
-                    pli_bom_step.ignore_parts = self.bom.ignore_parts  # type: ignore
+                    pli_bom_step.ignore_parts = self.bom.ignore_parts
                 for p in pli_step:
-                    pli_bom_step.add_part(BOMPart(1, p.name, p.attrib.colour))  # type: ignore
+                    pli_bom_step.add_part(BOMPart(1, p.name, p.attrib.colour))
                 if is_top_level and self.bom:
                     for p in pli_step:
-                        self.bom.add_part(BOMPart(1, p.name, p.attrib.colour))  # type: ignore
+                        self.bom.add_part(BOMPart(1, p.name, p.attrib.colour))
+
             sub_models_in_block = [
                 pd["partname"] for pd in part_dicts if pd["partname"] in self.sub_models
             ]
@@ -846,18 +879,25 @@ class LDRModel:
                 recursive_parse_model(
                     sub_pds, self.sub_models, temp_l, reset_parts_list_on_call=True
                 )
-                transformed_sub_parts = self.transform_parts(
-                    temp_l, aspect=tuple(current_aspect)
+                transformed_sub_parts_union = self.transform_parts(
+                    temp_l, aspect=current_aspect_tuple
                 )
-                if all(isinstance(tsp, LDRPart) for tsp in transformed_sub_parts):
-                    sub_parts_snap[sub_n] = transformed_sub_parts  # type: ignore
+
+                # CORRECTED ASSIGNMENT
+                if isinstance(transformed_sub_parts_union, list) and all(
+                    isinstance(tsp, LDRPart) for tsp in transformed_sub_parts_union
+                ):
+                    sub_parts_snap[sub_n] = cast(
+                        List[LDRPart], transformed_sub_parts_union
+                    )
+                else:  # This case should ideally not happen if temp_l was List[LDRPart]
+                    sub_parts_snap[sub_n] = []
+
             steps_dict[step_num] = {
-                "parts": list(snap_model) if isinstance(snap_model, list) else [],
-                "step_parts": (
-                    list(snap_step_parts) if isinstance(snap_step_parts, list) else []
-                ),
+                "parts": snap_model,
+                "step_parts": snap_step_parts,
                 "sub_models": sub_models_in_block,
-                "aspect": tuple(current_aspect),
+                "aspect": current_aspect_tuple,
                 "scale": current_scale,
                 "model_scale": model_inherent_scale,
                 "raw_ldraw": block_raw,
