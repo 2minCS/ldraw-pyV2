@@ -25,49 +25,45 @@
 # from LDraw primitives
 
 import copy
-
-# import os # REMOVED - Unused
 from math import pi, cos, sin
-from typing import (
-    List,
-    Union,
-    Tuple,
-    Optional,
-)  # Tuple, Optional were not explicitly used but good for future
+from dataclasses import dataclass, field, InitVar
+from typing import List, Union, Tuple, Optional
 
 # Explicit imports from toolbox
 from toolbox import Vector, Identity  # type: ignore
 
 # Explicit relative imports from ldrawpy package
-from .ldrprimitives import (
-    LDRAttrib,
-    LDRQuad,
-    LDRLine,
-    LDRTriangle,
-)  # REPLACED wildcard import
+from .ldrprimitives import LDRAttrib, LDRQuad, LDRLine, LDRTriangle
 from .ldrhelpers import GetCircleSegments
-from .constants import LDR_DEF_COLOUR, LDR_OPT_COLOUR  # REPLACED wildcard import
+from .constants import LDR_DEF_COLOUR, LDR_OPT_COLOUR
 
 
+@dataclass
 class LDRPolyWall:
     """
     Represents a polygonal wall made of LDRQuad primitives.
     The wall is defined by a list of points in the XZ plane and a height.
+    Converted to a dataclass.
     """
 
-    attrib: LDRAttrib
-    height: Union[int, float]
-    points: List[Vector]  # type: ignore # List of Vector objects defining the polygon base
+    # InitVars for parameters used to construct LDRAttrib
+    colour: InitVar[int] = LDR_DEF_COLOUR
+    units: InitVar[str] = "ldu"
 
-    def __init__(self, colour: int = LDR_DEF_COLOUR, units: str = "ldu"):
+    # Geometric parameters specific to the shape
+    height: Union[int, float] = 1.0
+    points: List[Vector] = field(default_factory=list)  # type: ignore
+
+    # LDRAttrib will be initialized in __post_init__
+    attrib: LDRAttrib = field(init=False)
+
+    def __post_init__(self, colour: int, units: str):
         self.attrib = LDRAttrib(colour, units)
-        self.height = 1.0  # Default height
-        self.points = []
 
     def __str__(self) -> str:
         s_list: List[str] = []
         num_points = len(self.points)
-        if num_points < 2:  # Need at least 2 points to form a segment of a wall
+        if num_points < 2:
             return ""
 
         for i in range(num_points):
@@ -99,36 +95,40 @@ class LDRPolyWall:
         return "".join(s_list)
 
 
+@dataclass
 class LDRRect:
     """
     Represents a rectangle in the XZ plane, composed of an LDRQuad and optional edge lines.
+    Converted to a dataclass.
     """
 
-    attrib: LDRAttrib
-    length: Union[int, float]
-    width: Union[int, float]
+    colour: InitVar[int] = LDR_DEF_COLOUR
+    units: InitVar[str] = "ldu"
 
-    def __init__(self, colour: int = LDR_DEF_COLOUR, units: str = "ldu"):
+    length: Union[int, float] = 1.0
+    width: Union[int, float] = 1.0
+
+    attrib: LDRAttrib = field(init=False)
+
+    def __post_init__(self, colour: int, units: str):
         self.attrib = LDRAttrib(colour, units)
-        self.length = 1.0
-        self.width = 1.0
 
     def __str__(self) -> str:
         s: List[str] = []
         half_len, half_width = float(self.length) / 2.0, float(self.width) / 2.0
 
         q = LDRQuad(self.attrib.colour, self.attrib.units)
-        q.p1 = Vector(-half_width, 0, half_len)
-        q.p2 = Vector(-half_width, 0, -half_len)
-        q.p3 = Vector(half_width, 0, -half_len)
-        q.p4 = Vector(half_width, 0, half_len)
+        q.p1 = Vector(-half_width, 0, half_len)  # type: ignore
+        q.p2 = Vector(-half_width, 0, -half_len)  # type: ignore
+        q.p3 = Vector(half_width, 0, -half_len)  # type: ignore
+        q.p4 = Vector(half_width, 0, half_len)  # type: ignore
 
         quad_for_lines = copy.deepcopy(q)
         quad_for_lines.transform(self.attrib.matrix)
         quad_for_lines.translate(self.attrib.loc)
 
-        edge_attrib = LDRAttrib(LDR_OPT_COLOUR, self.attrib.units)
-        line_edge = LDRLine(edge_attrib.colour, edge_attrib.units)
+        edge_attrib_obj = LDRAttrib(LDR_OPT_COLOUR, self.attrib.units)
+        line_edge = LDRLine(edge_attrib_obj.colour, edge_attrib_obj.units)
 
         line_edge.p1, line_edge.p2 = quad_for_lines.p1, quad_for_lines.p2
         s.append(str(line_edge))
@@ -146,29 +146,32 @@ class LDRRect:
         return "".join(s)
 
 
+@dataclass
 class LDRCircle:
     """
     Represents a circle in the XZ plane, made of LDRLine segments.
     Can optionally be filled with LDRTriangle primitives.
+    Converted to a dataclass.
     """
 
-    attrib: LDRAttrib
-    radius: Union[int, float]
-    segments: int
-    fill: bool
+    colour: InitVar[int] = LDR_DEF_COLOUR
+    units: InitVar[str] = "ldu"
 
-    def __init__(self, colour: int = LDR_DEF_COLOUR, units: str = "ldu"):
+    radius: Union[int, float] = 1.0
+    segments: int = 24
+    fill: bool = False
+
+    attrib: LDRAttrib = field(init=False)
+
+    def __post_init__(self, colour: int, units: str):
         self.attrib = LDRAttrib(colour, units)
-        self.radius = 1.0
-        self.segments = 24
-        self.fill = False
 
     def __str__(self) -> str:
         s: List[str] = []
-        line_attrib = LDRAttrib(self.attrib.colour, self.attrib.units)
+        line_attrib_obj = LDRAttrib(self.attrib.colour, self.attrib.units)
 
         circle_lines: List[LDRLine] = GetCircleSegments(
-            float(self.radius), self.segments, line_attrib
+            float(self.radius), self.segments, line_attrib_obj
         )
 
         for single_line in circle_lines:
@@ -192,35 +195,37 @@ class LDRCircle:
         return "".join(s)
 
 
+@dataclass
 class LDRDisc:
     """
-    Represents a disc (a ring or annulus) in the XZ plane,
-    made of LDRQuad primitives connecting an inner and outer circle.
+    Represents a disc (a ring or annulus) in the XZ plane.
+    Converted to a dataclass.
     """
 
-    attrib: LDRAttrib
-    radius: Union[int, float]
-    border: Union[int, float]
-    segments: int
+    colour: InitVar[int] = LDR_DEF_COLOUR
+    units: InitVar[str] = "ldu"
 
-    def __init__(self, colour: int = LDR_DEF_COLOUR, units: str = "ldu"):
+    radius: Union[int, float] = 1.0
+    border: Union[int, float] = 0.2
+    segments: int = 24
+
+    attrib: LDRAttrib = field(init=False)
+
+    def __post_init__(self, colour: int, units: str):
         self.attrib = LDRAttrib(colour, units)
-        self.radius = 1.0
-        self.border = 0.2
-        self.segments = 24
 
     def __str__(self) -> str:
         s: List[str] = []
         inner_radius = float(self.radius)
         outer_radius = float(self.radius) + float(self.border)
 
-        segment_attrib = LDRAttrib(self.attrib.colour, self.attrib.units)
+        segment_attrib_obj = LDRAttrib(self.attrib.colour, self.attrib.units)
 
         inner_circle_lines: List[LDRLine] = GetCircleSegments(
-            inner_radius, self.segments, segment_attrib
+            inner_radius, self.segments, segment_attrib_obj
         )
         outer_circle_lines: List[LDRLine] = GetCircleSegments(
-            outer_radius, self.segments, segment_attrib
+            outer_radius, self.segments, segment_attrib_obj
         )
 
         for i in range(self.segments):
@@ -237,44 +242,56 @@ class LDRDisc:
         return "".join(s)
 
 
+@dataclass
 class LDRHole:
     """
-    Represents a filled planar surface with a circular hole in the center,
-    lying in the XZ plane. Made of LDRQuads and optional edge lines.
+    Represents a filled planar surface with a circular hole in the center.
+    Converted to a dataclass.
     """
 
-    attrib: LDRAttrib
-    radius: Union[int, float]
-    segments: int
-    outer_size: Union[int, float]
+    colour: InitVar[int] = LDR_DEF_COLOUR
+    units: InitVar[str] = "ldu"
 
-    def __init__(self, colour: int = LDR_DEF_COLOUR, units: str = "ldu"):
+    radius: Union[int, float] = 1.0
+    segments: int = 16
+    outer_size: Optional[Union[int, float]] = field(default=None)
+
+    attrib: LDRAttrib = field(init=False)
+
+    def __post_init__(self, colour: int, units: str):
         self.attrib = LDRAttrib(colour, units)
-        self.radius = 1.0
-        self.segments = 16
-        self.outer_size = float(self.radius) * 2.5
+        if self.outer_size is None:
+            self.outer_size = float(self.radius) * 2.5
 
     def __str__(self) -> str:
         s: List[str] = []
         hole_radius = float(self.radius)
 
-        edge_attrib = LDRAttrib(LDR_OPT_COLOUR, self.attrib.units)
-        surface_attrib = LDRAttrib(self.attrib.colour, self.attrib.units)
+        edge_attrib_obj = LDRAttrib(LDR_OPT_COLOUR, self.attrib.units)
+        surface_attrib_obj = LDRAttrib(self.attrib.colour, self.attrib.units)
 
         inner_hole_lines: List[LDRLine] = GetCircleSegments(
-            hole_radius, self.segments, edge_attrib
+            hole_radius, self.segments, edge_attrib_obj
         )
 
-        outer_boundary_radius = float(self.outer_size) / 2.0
+        # Add assertion to assure MyPy that outer_size is not None here
+        assert (
+            self.outer_size is not None
+        ), "LDRHole.outer_size should be initialized in __post_init__"
+        current_outer_size = float(
+            self.outer_size
+        )  # Now MyPy knows self.outer_size is not None
+
+        outer_boundary_radius = current_outer_size / 2.0
         if outer_boundary_radius <= hole_radius:
             outer_boundary_radius = hole_radius * 1.2
 
         outer_boundary_lines: List[LDRLine] = GetCircleSegments(
-            outer_boundary_radius, self.segments, edge_attrib
+            outer_boundary_radius, self.segments, edge_attrib_obj
         )
 
         for i in range(self.segments):
-            q = LDRQuad(surface_attrib.colour, surface_attrib.units)
+            q = LDRQuad(surface_attrib_obj.colour, surface_attrib_obj.units)
             q.p1 = inner_hole_lines[i].p1.copy()
             q.p2 = outer_boundary_lines[i].p1.copy()
             q.p3 = outer_boundary_lines[i].p2.copy()
@@ -299,32 +316,33 @@ class LDRHole:
         return "".join(s)
 
 
+@dataclass
 class LDRCylinder:
     """
-    Represents a cylinder aligned with the Y-axis,
-    composed of LDRQuads for the sides and LDRTriangles for the caps.
-    Includes optional edge lines.
+    Represents a cylinder aligned with the Y-axis.
+    Converted to a dataclass.
     """
 
-    attrib: LDRAttrib
-    radius: Union[int, float]
-    height: Union[int, float]
-    segments: int
+    colour: InitVar[int] = LDR_DEF_COLOUR
+    units: InitVar[str] = "ldu"
 
-    def __init__(self, colour: int = LDR_DEF_COLOUR, units: str = "ldu"):
+    radius: Union[int, float] = 1.0
+    height: Union[int, float] = 1.0
+    segments: int = 16
+
+    attrib: LDRAttrib = field(init=False)
+
+    def __post_init__(self, colour: int, units: str):
         self.attrib = LDRAttrib(colour, units)
-        self.radius = 1.0
-        self.height = 1.0
-        self.segments = 16
 
     def __str__(self) -> str:
         s: List[str] = []
         cyl_radius, cyl_height = float(self.radius), float(self.height)
 
-        edge_line_attrib = LDRAttrib(LDR_OPT_COLOUR, self.attrib.units)
+        edge_line_attrib_obj = LDRAttrib(LDR_OPT_COLOUR, self.attrib.units)
 
         base_circle_lines: List[LDRLine] = GetCircleSegments(
-            cyl_radius, self.segments, edge_line_attrib
+            cyl_radius, self.segments, edge_line_attrib_obj
         )
 
         for base_line_segment in base_circle_lines:
@@ -383,22 +401,24 @@ class LDRCylinder:
         return "".join(s)
 
 
+@dataclass
 class LDRBox:
     """
-    Represents a 3D box centered at the origin before transformation,
-    composed of LDRQuads for faces and optional LDRLines for edges.
+    Represents a 3D box centered at the origin before transformation.
+    Converted to a dataclass.
     """
 
-    attrib: LDRAttrib
-    length: Union[int, float]
-    width: Union[int, float]
-    height: Union[int, float]
+    colour: InitVar[int] = LDR_DEF_COLOUR
+    units: InitVar[str] = "ldu"
 
-    def __init__(self, colour: int = LDR_DEF_COLOUR, units: str = "ldu"):
+    length: Union[int, float] = 1.0
+    width: Union[int, float] = 1.0
+    height: Union[int, float] = 1.0
+
+    attrib: LDRAttrib = field(init=False)
+
+    def __post_init__(self, colour: int, units: str):
         self.attrib = LDRAttrib(colour, units)
-        self.length = 1.0
-        self.width = 1.0
-        self.height = 1.0
 
     def __str__(self) -> str:
         s: List[str] = []
@@ -419,7 +439,7 @@ class LDRBox:
             Vector(-hw, -hh, -hl),
         ]  # type: ignore
 
-        edge_attrib = LDRAttrib(LDR_OPT_COLOUR, self.attrib.units)
+        edge_attrib_obj = LDRAttrib(LDR_OPT_COLOUR, self.attrib.units)
         edge_indices = [
             (0, 1),
             (1, 2),
@@ -435,7 +455,7 @@ class LDRBox:
             (3, 7),
         ]
         for p_idx1, p_idx2 in edge_indices:
-            line_edge = LDRLine(edge_attrib.colour, edge_attrib.units)
+            line_edge = LDRLine(edge_attrib_obj.colour, edge_attrib_obj.units)
             line_edge.p1 = pts[p_idx1].copy()
             line_edge.p2 = pts[p_idx2].copy()
             line_edge.transform(self.attrib.matrix)
