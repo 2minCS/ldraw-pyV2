@@ -37,7 +37,7 @@ from typing import (
     TypedDict,
     TypeVar,
     Callable,
-    cast
+    cast,
 )
 
 from toolbox import Vector, Matrix, Identity, ZAxis, safe_vector  # type: ignore
