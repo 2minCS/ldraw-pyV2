@@ -25,13 +25,11 @@
 
 import hashlib
 from collections import defaultdict
-from pathlib import Path  # ADDED
-from typing import List, Dict, Tuple, Any, Optional, Union, cast
+from pathlib import Path
+from typing import List, Dict, Tuple, Any, Optional, Union, cast, TypedDict
 
 # Explicit imports from toolbox
 from toolbox import Vector, Matrix, Identity, apply_params, progress_bar, safe_vector  # type: ignore
-
-# split_path will be removed as its usage is replaced by pathlib
 
 # Explicit imports from ldrawpy package
 from .constants import SPECIAL_TOKENS, LDR_DEF_COLOUR, ASPECT_DICT, FLIP_DICT
@@ -41,12 +39,16 @@ from .ldrhelpers import norm_aspect, preset_aspect
 # Conditional import for brickbom
 try:
     from brickbom import BOM, BOMPart  # type: ignore
+
+    BOM_AVAILABLE = True
 except ImportError:
-    BOM = None  # type: ignore
-    BOMPart = None  # type: ignore
+    BOM = object  # type: ignore
+    BOMPart = object  # type: ignore
+    BOM_AVAILABLE = False
 
 from rich import print as rich_print  # type: ignore
 
+# --- Constants for parsing ---
 START_TOKENS = ["PLI BEGIN IGN", "BUFEXCHG STORE"]
 END_TOKENS = ["PLI END", "BUFEXCHG RETRIEVE"]
 EXCEPTION_LIST = ["2429c01.dat"]
@@ -112,8 +114,61 @@ COMMON_SUBSTITUTIONS: List[Tuple[str, str]] = [
 ]
 
 
+# --- TypedDict Definitions ---
+class MetaCommandData(TypedDict, total=False):
+    values: List[str]
+    text: str
+
+
+ParsedMetaCommandItem = Dict[str, MetaCommandData]
+
+
+class ModelPartEntry(TypedDict):
+    ldrtext: str
+    partname: str
+
+
+class CalloutData(TypedDict, total=False):
+    level: int
+    end: int
+    parent: int
+    scale: float
+
+
+PLIBomType = Union[BOM, List[Any]]
+
+
+class StepData(TypedDict):
+    step: int  # ADDED: Original step number in its parent model
+    parts: List[LDRPart]
+    step_parts: List[LDRPart]
+    sub_models: List[str]
+    aspect: Tuple[float, float, float]
+    scale: float
+    model_scale: float
+    raw_ldraw: str
+    pli_bom: PLIBomType
+    meta: List[ParsedMetaCommandItem]
+    aspect_change: bool
+    sub_parts: Dict[str, List[LDRPart]]
+
+
+class UnwrappedStepEntry(StepData):
+    idx: int
+    level: int
+    # 'step' is inherited from StepData
+    next_step: int
+    num_steps: int
+    model: str
+    qty: int
+    prev_level: int
+    next_level: int
+    page_break: bool
+    callout: int
+
+
+# --- Helper Functions ---
 def substitute_part(part: LDRPart) -> LDRPart:
-    """Applies common part substitutions to an LDRPart object."""
     for e in COMMON_SUBSTITUTIONS:
         if part.name == e[0]:
             part.name = e[1]
@@ -121,45 +176,49 @@ def substitute_part(part: LDRPart) -> LDRPart:
 
 
 def line_has_all_tokens(line: str, tokenlist: List[str]) -> bool:
-    """Checks if a line contains all tokens from any group in a list of token groups."""
     line_tokens = line.split()
     for t_group_str in tokenlist:
-        # Check if all required tokens in the current group are present in the line
         if all(req_token in line_tokens for req_token in t_group_str.split()):
             return True
     return False
 
 
-def parse_special_tokens(line: str) -> List[Dict[str, Any]]:
-    """Parses a line for special LDraw meta-commands defined in SPECIAL_TOKENS."""
+def parse_special_tokens(line: str) -> List[ParsedMetaCommandItem]:
     ls = line.strip().split()
-    metas: List[Dict[str, Any]] = []
+    metas: List[ParsedMetaCommandItem] = []
     for cmd_key, token_patterns in SPECIAL_TOKENS.items():
         for pattern_str in token_patterns:
             pattern_tokens = pattern_str.split()
-            # Extract non-placeholder tokens from the pattern (those not starting with '%')
             non_placeholder_pattern_tokens = [
                 pt for pt in pattern_tokens if not pt.startswith("%")
             ]
-            # Check if all non-placeholder tokens are in the line
             if not all(nppt in ls for nppt in non_placeholder_pattern_tokens):
                 continue
-
             extracted_values: List[str] = []
             valid_match_for_values = True
             try:
-                # Assume the first non-placeholder token is the command itself
                 cmd_in_pattern = non_placeholder_pattern_tokens[0]
-                cmd_start_idx_in_line = ls.index(cmd_in_pattern)
+                # cmd_start_idx_in_line = ls.index(cmd_in_pattern) # Not directly used with new logic
 
-                for pt_idx, pt_token in enumerate(pattern_tokens):
+                idx_of_last_cmd_keyword_in_pattern = -1
+                for idx, token_in_pattern in enumerate(pattern_tokens):
+                    if not token_in_pattern.startswith("%"):
+                        idx_of_last_cmd_keyword_in_pattern = idx
+
+                # Find the index of the last command keyword of the pattern within the line
+                # This assumes the command keywords appear contiguously in the line
+                idx_of_first_cmd_keyword_in_line = ls.index(
+                    non_placeholder_pattern_tokens[0]
+                )
+                idx_of_last_cmd_keyword_in_line = idx_of_first_cmd_keyword_in_line + (
+                    len(non_placeholder_pattern_tokens) - 1
+                )
+
+                for pt_token in pattern_tokens:
                     if pt_token.startswith("%") and pt_token[1:].isdigit():
                         placeholder_num_in_pattern = int(pt_token[1:])
-                        idx_of_last_cmd_token_in_line = ls.index(
-                            non_placeholder_pattern_tokens[-1]
-                        )
                         actual_value_idx_in_line = (
-                            idx_of_last_cmd_token_in_line + placeholder_num_in_pattern
+                            idx_of_last_cmd_keyword_in_line + placeholder_num_in_pattern
                         )
 
                         if actual_value_idx_in_line < len(ls):
@@ -167,29 +226,30 @@ def parse_special_tokens(line: str) -> List[Dict[str, Any]]:
                         else:
                             valid_match_for_values = False
                             break
-            except (ValueError, IndexError):  # If .index fails or out of bounds
+            except (ValueError, IndexError):
                 valid_match_for_values = False
 
             if not valid_match_for_values and any(
                 pt.startswith("%") for pt in pattern_tokens
-            ):  # If placeholders were expected but not found
+            ):
                 continue
 
+            current_meta_data: MetaCommandData = {"text": line.strip()}
             if extracted_values:
-                metas.append(
-                    {cmd_key: {"values": extracted_values, "text": line.strip()}}
-                )
-            else:
-                metas.append({cmd_key: {"text": line.strip()}})
+                current_meta_data["values"] = extracted_values
+
+            # MyPy might struggle here if it can't infer that cmd_key is a valid key for ParsedMetaCommandItem
+            # This usually happens if ParsedMetaCommandItem was defined as a Union of specific TypedDicts.
+            # Since it's Dict[str, MetaCommandData], this should be okay.
+            metas.append({cmd_key: current_meta_data})
             break
         if metas and metas[-1].get(cmd_key):
             break
     return metas
 
 
-def get_meta_commands(ldr_string: str) -> List[Dict[str, Any]]:
-    """Extracts all recognized meta commands from an LDraw string."""
-    cmd: List[Dict[str, Any]] = []
+def get_meta_commands(ldr_string: str) -> List[ParsedMetaCommandItem]:
+    cmd: List[ParsedMetaCommandItem] = []
     for line in ldr_string.splitlines():
         stripped_line = line.lstrip()
         if not stripped_line or not stripped_line.startswith("0 "):
@@ -200,43 +260,36 @@ def get_meta_commands(ldr_string: str) -> List[Dict[str, Any]]:
     return cmd
 
 
-def get_parts_from_model(ldr_string: str) -> List[Dict[str, str]]:
-    """
-    Extracts type 1 LDraw lines (parts/submodels) from an LDraw string,
-    respecting masking contexts like PLI and BUFEXCHG.
-    """
-    parts: List[Dict[str, str]] = []
+def get_parts_from_model(ldr_string: str) -> List[ModelPartEntry]:
+    parts: List[ModelPartEntry] = []
     lines = ldr_string.splitlines()
     mask_depth = 0
     bufex = False
-
     for line in lines:
         stripped_line = line.lstrip()
         if not stripped_line:
             continue
-
         if line_has_all_tokens(line, ["BUFEXCHG STORE"]):
             bufex = True
         if line_has_all_tokens(line, ["BUFEXCHG RETRIEVE"]):
             bufex = False
-
         if line_has_all_tokens(line, START_TOKENS):
             mask_depth += 1
         if line_has_all_tokens(line, END_TOKENS):
             if mask_depth > 0:
                 mask_depth -= 1
-
         try:
             line_type = int(stripped_line[0])
         except (ValueError, IndexError):
             continue
-
         if line_type == 1:
             split_line_tokens = line.split()
             if len(split_line_tokens) < 14:
                 continue
-            part_dict = {"ldrtext": line, "partname": " ".join(split_line_tokens[14:])}
-
+            part_dict: ModelPartEntry = {
+                "ldrtext": line,
+                "partname": " ".join(split_line_tokens[14:]),
+            }
             if mask_depth == 0:
                 parts.append(part_dict)
             else:
@@ -248,36 +301,27 @@ def get_parts_from_model(ldr_string: str) -> List[Dict[str, str]]:
 
 
 def recursive_parse_model(
-    model_entries: List[Dict[str, str]],
-    all_submodels_data: Dict[str, List[Dict[str, str]]],
+    model_entries: List[ModelPartEntry],
+    all_submodels_data: Dict[str, List[ModelPartEntry]],
     output_parts_list: List[LDRPart],
     current_offset: Vector = Vector(0, 0, 0),  # type: ignore
     current_matrix: Matrix = Identity(),  # type: ignore
     reset_parts_list_on_call: bool = False,
     filter_for_submodel_name: Optional[str] = None,
 ):
-    """
-    Recursively parses a model structure, resolving submodels into their constituent parts.
-    Applies transformations down the hierarchy.
-    """
     if reset_parts_list_on_call:
         output_parts_list.clear()
-
     for entry_dict in model_entries:
         part_name, ldr_text = entry_dict["partname"], entry_dict["ldrtext"]
-
         if filter_for_submodel_name and part_name != filter_for_submodel_name:
             continue
-
         if part_name in all_submodels_data:
             submodel_definition_entries = all_submodels_data[part_name]
             ref_part_instance = LDRPart()
             if ref_part_instance.from_str(ldr_text) is None:
                 continue
-
             new_matrix = current_matrix * ref_part_instance.attrib.matrix
             new_offset = current_matrix * ref_part_instance.attrib.loc + current_offset  # type: ignore
-
             recursive_parse_model(
                 submodel_definition_entries,
                 all_submodels_data,
@@ -291,10 +335,8 @@ def recursive_parse_model(
             actual_part = LDRPart()
             if actual_part.from_str(ldr_text) is None:
                 continue
-
             actual_part = substitute_part(actual_part)
             actual_part.transform(matrix=current_matrix, offset=current_offset)
-
             if (
                 actual_part.name not in IGNORE_LIST
                 and actual_part.name.upper() not in IGNORE_LIST
@@ -303,22 +345,18 @@ def recursive_parse_model(
 
 
 def unique_set(items: List[Any]) -> Dict[Any, int]:
-    """Returns a dictionary of unique items from a list and their counts."""
     return dict(defaultdict(int, {k: items.count(k) for k in set(items)}))
 
 
 def key_name(elem: LDRPart) -> str:
-    """Sort key for LDRPart based on name."""
     return elem.name
 
 
 def key_colour(elem: LDRPart) -> int:
-    """Sort key for LDRPart based on colour code."""
     return elem.attrib.colour
 
 
 def get_sha1_hash(parts: List[LDRPart]) -> str:
-    """Generates a SHA1 hash from a list of LDRPart objects."""
     if not all(isinstance(p, LDRPart) for p in parts):
         return "error_parts_not_LDRPart_objects"
     hashes = sorted([p.sha1hash() for p in parts])
@@ -331,7 +369,6 @@ def get_sha1_hash(parts: List[LDRPart]) -> str:
 def sort_parts(
     parts: List[LDRPart], key: str = "name", order: str = "ascending"
 ) -> List[LDRPart]:
-    """Sorts a list of LDRPart objects by a given key and order."""
     if not all(isinstance(p, LDRPart) for p in parts):
         return []
     sp = list(parts)
@@ -349,11 +386,6 @@ def sort_parts(
 
 
 class LDRModel:
-    """
-    Represents an LDraw model, capable of parsing LDraw files (including MPD),
-    managing steps, submodels, and generating various views or BOMs.
-    """
-
     PARAMS: Dict[str, Any] = {
         "global_origin": (0.0, 0.0, 0.0),
         "global_aspect": (-40.0, 55.0, 0.0),
@@ -370,14 +402,14 @@ class LDRModel:
     filepath: Path
     title: str
     bom: Optional[BOM]
-    steps: Dict[int, Dict[str, Any]]
+    steps: Dict[int, StepData]
     pli: Dict[int, List[LDRPart]]
-    sub_models: Dict[str, List[Dict[str, str]]]
+    sub_models: Dict[str, List[ModelPartEntry]]
     sub_model_str: Dict[str, str]
-    unwrapped: Optional[List[Dict[str, Any]]]
-    callouts: Dict[int, Dict[str, Any]]
+    unwrapped: Optional[List[UnwrappedStepEntry]]
+    callouts: Dict[int, CalloutData]
     continuous_step_count: int
-    _parsed_submodel_steps_cache: Dict[str, Any]
+    _parsed_submodel_steps_cache: Dict[str, Dict[int, StepData]]
 
     global_origin: Tuple[float, float, float]
     global_aspect: Tuple[float, float, float]
@@ -390,8 +422,7 @@ class LDRModel:
     def __init__(self, filename_str: str, **kwargs: Any):
         self.filepath = Path(filename_str).expanduser().resolve()
         self.title = self.filepath.name
-
-        self.bom = BOM() if BOM else None
+        self.bom = BOM() if BOM_AVAILABLE else None
         self.steps = {}
         self.pli = {}
         self.sub_models = {}
@@ -400,11 +431,9 @@ class LDRModel:
         self.callouts = {}
         self.continuous_step_count = 0
         self._parsed_submodel_steps_cache = {}
-
         for key, value in self.PARAMS.items():
             setattr(self, key, value)
         apply_params(self, kwargs)
-
         if self.bom and hasattr(self.bom, "ignore_parts"):
             self.bom.ignore_parts = []
 
@@ -417,35 +446,34 @@ class LDRModel:
             f"  Number of sub-models: {len(self.sub_models)}"
         )
 
-    def __getitem__(self, key: int) -> Dict[str, Any]:
-        """Allows accessing unwrapped steps by index like a list."""
+    def __getitem__(self, key: int) -> UnwrappedStepEntry:
         if self.unwrapped is None:
             self.unwrap()
-
-        # Assign to a local variable for MyPy to narrow the type effectively
         current_unwrapped_steps = self.unwrapped
         if current_unwrapped_steps is None:
             raise IndexError("Model not unwrapped or unwrap failed.")
-        return current_unwrapped_steps[key]  # Index the local variable
+        return current_unwrapped_steps[key]
 
     def print_step_dict(self, key: int):
-        """Prints the detailed dictionary for a specific parsed step of the main model."""
         if key in self.steps:
-            s_dict = self.steps[key]
+            s_dict = self.steps[key]  # s_dict is StepData
             for k, v_item in s_dict.items():
+                # k is a key of StepData, v_item is its value
                 if k == "sub_parts" and isinstance(v_item, dict):
                     rich_print(f"[bold blue]{k}:[/bold blue]")
-                    for ks_sub, vs_list_sub in v_item.items():  # type: ignore
+                    for ks_sub, vs_list_sub in v_item.items():
                         rich_print(f"  [cyan]{ks_sub}:[/cyan]")
-                        for e_part_sub in vs_list_sub:  # type: ignore
+                        for e_part_sub in vs_list_sub:
                             rich_print(f"    {str(e_part_sub).rstrip()}")
-                elif isinstance(v_item, list) and all(
-                    isinstance(item, LDRPart) for item in v_item  # type: ignore
+                elif (
+                    (k == "parts" or k == "step_parts")
+                    and isinstance(v_item, list)
+                    and all(isinstance(item, LDRPart) for item in v_item)
                 ):
-                    rich_print(f"[bold blue]{k}:[/bold blue] ({len(v_item)} items)")  # type: ignore
-                    for vx_part_item in v_item:  # type: ignore
+                    rich_print(f"[bold blue]{k}:[/bold blue] ({len(v_item)} items)")
+                    for vx_part_item in v_item:
                         rich_print(f"  {str(vx_part_item).rstrip()}")
-                elif k == "pli_bom" and BOM is not None and isinstance(v_item, BOM):
+                elif k == "pli_bom" and BOM_AVAILABLE and isinstance(v_item, BOM):
                     rich_print(f"[bold blue]{k}:[/bold blue]")
                     if hasattr(v_item, "summary_str"):
                         rich_print(f"  {v_item.summary_str()}")  # type: ignore
@@ -457,21 +485,20 @@ class LDRModel:
             rich_print(f"Step {key} not found in main model steps.")
 
     def print_unwrapped_dict(self, idx: int):
-        """Prints the detailed dictionary for a specific step from the unwrapped model list."""
         if self.unwrapped is None or not (0 <= idx < len(self.unwrapped)):
             rich_print(f"Index {idx} out of bounds for unwrapped model.")
             return
-        s_dict = self.unwrapped[idx]
+        s_dict = self.unwrapped[idx]  # s_dict is UnwrappedStepEntry
         for k, v_item in s_dict.items():
             if (
-                k in ("parts", "step_parts")
+                (k == "parts" or k == "step_parts")
                 and isinstance(v_item, list)
-                and all(isinstance(item, LDRPart) for item in v_item)  # type: ignore
+                and all(isinstance(item, LDRPart) for item in v_item)
             ):
-                rich_print(f"[bold green]{k}:[/bold green] ({len(v_item)} parts)")  # type: ignore
-                for vx_part_item in v_item:  # type: ignore
+                rich_print(f"[bold green]{k}:[/bold green] ({len(v_item)} parts)")
+                for vx_part_item in v_item:
                     rich_print(f"  {str(vx_part_item).rstrip()}")
-            elif k == "pli_bom" and BOM is not None and isinstance(v_item, BOM):
+            elif k == "pli_bom" and BOM_AVAILABLE and isinstance(v_item, BOM):
                 rich_print(f"[bold green]{k}:[/bold green]")
                 if hasattr(v_item, "summary_str"):
                     rich_print(f"  {v_item.summary_str()}")  # type: ignore
@@ -481,70 +508,63 @@ class LDRModel:
                 rich_print(f"[bold green]{k}:[/bold green] {v_item}")
 
     def print_unwrapped_verbose(self):
-        """Prints a verbose summary of each step in the unwrapped model."""
         if not self.unwrapped:
             rich_print("Model not unwrapped.")
             return
-        for i, v_step_item in enumerate(self.unwrapped):
-            aspect = v_step_item.get("aspect", (0.0, 0.0, 0.0))
+        for i, v_step_item in enumerate(
+            self.unwrapped
+        ):  # v_step_item is UnwrappedStepEntry
+            aspect = v_step_item[
+                "aspect"
+            ]  # Direct access, key is required in UnwrappedStepEntry (via StepData)
             rich_print(
-                f"{i:3d}. idx:{v_step_item.get('idx','N/A'):3} "
-                f"[pl:{v_step_item.get('prev_level', 'N/A')} l:{v_step_item.get('level','N/A')} nl:{v_step_item.get('next_level', 'N/A')}] "
-                f"[s:{v_step_item.get('step','N/A'):2} ns:{v_step_item.get('next_step','N/A'):2} sc:{v_step_item.get('num_steps','N/A'):2}] "
-                f"{str(v_step_item.get('model','N/A'))[:16]:<16} q:{v_step_item.get('qty',0):d} sc:{v_step_item.get('scale',0.0):.2f} "
+                f"{i:3d}. idx:{v_step_item['idx']:3} "
+                f"[pl:{v_step_item['prev_level']} l:{v_step_item['level']} nl:{v_step_item['next_level']}] "
+                f"[s:{v_step_item['step']:2} ns:{v_step_item['next_step']:2} sc:{v_step_item['num_steps']:2}] "
+                f"{str(v_step_item['model'])[:16]:<16} q:{v_step_item['qty']:d} sc:{v_step_item['scale']:.2f} "
                 f"asp:({aspect[0]:3.0f},{aspect[1]:4.0f},{aspect[2]:3.0f})"
             )
 
     def print_unwrapped(self):
-        """Prints a formatted summary of each step in the unwrapped model."""
         if not self.unwrapped:
             rich_print("Model not unwrapped.")
             return
-        for v_step_item in self.unwrapped:
+        for v_step_item in self.unwrapped:  # v_step_item is UnwrappedStepEntry
             self.print_step(v_step_item)
 
-    def print_step(self, v_step_dict: dict):
-        """Helper to print a single step from the unwrapped model list, formatted."""
-        pb = "break" if v_step_dict.get("page_break") else ""
-        co = str(v_step_dict.get("callout", 0))
-        model_name = str(v_step_dict.get("model", "")).replace(".ldr", "")[:16]
-        qty = (
-            f"({v_step_dict.get('qty',0):2d}x)"
-            if v_step_dict.get("qty", 0) > 0
-            else "     "
-        )
-        level_str = (
-            " " * v_step_dict.get("level", 0) + f"Level {v_step_dict.get('level',0)}"
-        )
+    def print_step(self, v_step_dict: UnwrappedStepEntry):
+        pb = "break" if v_step_dict["page_break"] else ""
+        co = str(v_step_dict["callout"])
+        model_name = str(v_step_dict["model"]).replace(".ldr", "")[:16]
+        qty = f"({v_step_dict['qty']:2d}x)" if v_step_dict["qty"] > 0 else "     "
+        level_str = " " * v_step_dict["level"] + f"Level {v_step_dict['level']}"
         level_str_padded = f"{level_str:<11}"
-
-        pli_bom_obj = v_step_dict.get("pli_bom")
+        pli_bom_obj = v_step_dict["pli_bom"]
         parts_count = 0
-        if BOM and isinstance(pli_bom_obj, BOM) and hasattr(pli_bom_obj, "parts"):
+        if (
+            BOM_AVAILABLE
+            and isinstance(pli_bom_obj, BOM)
+            and hasattr(pli_bom_obj, "parts")
+        ):
             parts_count = len(pli_bom_obj.parts)  # type: ignore
         elif isinstance(pli_bom_obj, list):
             parts_count = len(pli_bom_obj)
         parts_str = f"({parts_count:2d}x pcs)"
-
         meta_tags = []
-        for m_item in v_step_dict.get("meta", []):
-            if isinstance(m_item, dict):
-                for k_meta, v_meta_dict in m_item.items():
-                    tag_str = k_meta.replace("_", " ")
-                    if k_meta == "columns" and "values" in v_meta_dict:  # type: ignore
-                        meta_tags.append(f"[green]COL{v_meta_dict['values'][0]}[/]")  # type: ignore
-                    else:
-                        meta_tags.append(f"[dim]{tag_str}[/dim]")
-            else:
-                meta_tags.append(str(m_item))
+        for m_item_dict in v_step_dict["meta"]:
+            for k_meta, v_meta_data in m_item_dict.items():
+                tag_str = k_meta.replace("_", " ")
+                if k_meta == "columns" and "values" in v_meta_data:
+                    meta_tags.append(f"[green]COL{v_meta_data['values'][0]}[/]")
+                else:
+                    meta_tags.append(f"[dim]{tag_str}[/dim]")
         meta_str = " ".join(meta_tags)
-        aspect = v_step_dict.get("aspect", (0.0, 0.0, 0.0))
-
+        aspect = v_step_dict["aspect"]
         fmt_base = (
-            f"{v_step_dict.get('idx','N/A'):3}. {level_str_padded} Step "
-            f"{'[yellow]' if co != '0' else '[green]'}{v_step_dict.get('step','N/A'):3}/{v_step_dict.get('num_steps','N/A'):3}{'[/]'} "
+            f"{v_step_dict['idx']:3}. {level_str_padded} Step "
+            f"{'[yellow]' if co != '0' else '[green]'}{v_step_dict['step']:3}/{v_step_dict['num_steps']:3}{'[/]'} "
             f"Model: {'[red]' if co != '0' and model_name != 'root' else '[green]'}{model_name:<16}{'[/]'} "
-            f"{qty} {parts_str} scale: {v_step_dict.get('scale',0.0):.2f} "
+            f"{qty} {parts_str} scale: {v_step_dict['scale']:.2f} "
             f"({aspect[0]:3.0f},{aspect[1]:4.0f},{aspect[2]:3.0f})"
         )
         fmt_co = f" {'[yellow]' if co != '0' else '[dim]'}{co}{'[/]'}"
@@ -558,10 +578,8 @@ class LDRModel:
         aspect: Optional[Union[Tuple[float, float, float], Vector]] = None,  # type: ignore
         use_exceptions: bool = False,
     ) -> List[LDRPart]:
-        """Transforms a list of parts to a specific origin and aspect (for PLI)."""
         final_aspect_tuple = aspect if aspect is not None else self.pli_aspect
         final_origin_vec = safe_vector(origin) if origin is not None else None
-
         transformed_parts = []
         for p_part in parts:
             np = p_part.copy()
@@ -580,15 +598,12 @@ class LDRModel:
         offset: Optional[Union[Tuple[float, float, float], Vector]] = None,  # type: ignore
         aspect: Optional[Union[Tuple[float, float, float], Vector]] = None,  # type: ignore
     ) -> Union[List[LDRPart], List[str]]:
-        """Transforms a list of parts (LDRPart objects or LDraw strings) by an offset and aspect."""
         final_aspect_tuple = aspect if aspect is not None else self.global_aspect
         final_offset_vec = (
             safe_vector(offset) if offset is not None else Vector(0, 0, 0)  # type: ignore
         )
-
         if not parts:
             return []
-
         if all(isinstance(p_item, LDRPart) for p_item in parts):
             processed_ldr_parts: List[LDRPart] = []
             for p_obj_item in cast(List[LDRPart], parts):
@@ -611,11 +626,6 @@ class LDRModel:
         return []
 
     def parse_file(self):
-        """
-        Parses the LDraw model file specified during initialization.
-        Handles MPD (Multi-Part Document) files by identifying the root model
-        and submodels. Populates self.steps, self.pli, self.sub_models, etc.
-        """
         self.sub_models = {}
         self.sub_model_str = {}
         try:
@@ -651,7 +661,6 @@ class LDRModel:
             lines_in_submodel = full_sub_model_definition_str.splitlines()
             if not lines_in_submodel:
                 continue
-
             sub_name_key = lines_in_submodel[0].replace("0 FILE", "").strip().lower()
             if sub_name_key:
                 self.sub_model_str[sub_name_key] = full_sub_model_definition_str
@@ -668,18 +677,11 @@ class LDRModel:
                 f"Warning: Root model content for {str(self.filepath)} is empty after processing '0 FILE' directives."
             )
             self.pli, self.steps = {}, {}
-
         self.unwrap()
 
     def unwrap(self):
-        """
-        Flattens the hierarchical model structure (main model and its submodels)
-        into a single list of steps (self.unwrapped). This involves recursively
-        processing each step and its submodels.
-        """
         if self.unwrapped is not None:
             return
-
         self._parsed_submodel_steps_cache = {}
         for sub_name, sub_model_raw_str_content in self.sub_model_str.items():
             _, steps_dict_for_submodel = self.parse_model_steps(
@@ -687,30 +689,35 @@ class LDRModel:
             )
             self._parsed_submodel_steps_cache[sub_name] = steps_dict_for_submodel
 
+        # Initialize unwrapped to an empty list before starting the recursive process
+        # This ensures that _unwrap_model_recursive receives a list, not None, for its accumulator.
+        initial_unwrapped_list: List[UnwrappedStepEntry] = []
         self.unwrapped = self._unwrap_model_recursive(
-            current_model_steps_dict=self.steps
+            current_model_steps_dict=self.steps,
+            unwrapped_list_accumulator=initial_unwrapped_list,  # Pass the initialized list
         )
 
     def _unwrap_model_recursive(
         self,
-        current_model_steps_dict: Dict[int, Dict[str, Any]],
+        current_model_steps_dict: Dict[int, StepData],
         current_idx_offset: int = 0,
         current_level: int = 0,
         model_name_for_these_steps: str = "root",
         model_qty_for_this_instance: int = 1,
-        unwrapped_list_accumulator: Optional[List[Dict[str, Any]]] = None,
-    ) -> Union[List[Dict[str, Any]], Tuple[List[Dict[str, Any]], int]]:
-        """
-        Recursive helper for unwrap. Processes steps of current_model_steps_dict.
-        If a step contains submodels, calls itself for each submodel.
-        Returns the populated list and the next available global index.
-        """
-        is_top_level_call = unwrapped_list_accumulator is None
-        if is_top_level_call:
-            unwrapped_list_accumulator = []
+        unwrapped_list_accumulator: List[
+            UnwrappedStepEntry
+        ] = [],  # Now defaults to empty list
+    ) -> Union[List[UnwrappedStepEntry], Tuple[List[UnwrappedStepEntry], int]]:
+
+        is_top_level_call = (
+            current_level == 0
+            and current_idx_offset == 0
+            and model_name_for_these_steps == "root"
+        )
+        # If it's the top-level call and unwrapped_list_accumulator was passed as the default [], it's fine.
+        # For recursive calls, it will be passed the accumulating list.
 
         next_global_idx = current_idx_offset
-
         sorted_step_numbers = sorted(current_model_steps_dict.keys())
 
         for step_no_in_current_model in sorted_step_numbers:
@@ -730,6 +737,7 @@ class LDRModel:
                     if not submodel_definition_steps:
                         continue
 
+                    # Pass the same unwrapped_list_accumulator for recursive calls
                     recursive_result = self._unwrap_model_recursive(
                         submodel_definition_steps,
                         next_global_idx,
@@ -738,16 +746,17 @@ class LDRModel:
                         qty_of_this_sub_ref,
                         unwrapped_list_accumulator,
                     )
+                    # The recursive call appends to the list passed; we only need the updated index
                     if (
                         isinstance(recursive_result, tuple)
                         and len(recursive_result) == 2
                     ):
                         next_global_idx = recursive_result[1]
 
-            entry_for_unwrapped_list = {
+            entry_for_unwrapped_list: UnwrappedStepEntry = {
                 "idx": next_global_idx,
                 "level": current_level,
-                "step": step_no_in_current_model,
+                "step": step_no_in_current_model,  # This is now correctly expected via StepData
                 "next_step": (
                     step_no_in_current_model + 1
                     if step_no_in_current_model < len(sorted_step_numbers)
@@ -756,58 +765,64 @@ class LDRModel:
                 "num_steps": len(sorted_step_numbers),
                 "model": model_name_for_these_steps,
                 "qty": model_qty_for_this_instance,
-                "scale": step_data_from_parent.get("scale", self.global_scale),
-                "model_scale": step_data_from_parent.get(
-                    "model_scale", self.global_scale
-                ),
-                "aspect": step_data_from_parent.get("aspect", self.global_aspect),
-                "parts": step_data_from_parent.get("parts", []),
-                "step_parts": step_data_from_parent.get("step_parts", []),
-                "pli_bom": step_data_from_parent.get("pli_bom", BOM() if BOM else []),
-                "meta": step_data_from_parent.get("meta", []),
-                "aspect_change": step_data_from_parent.get("aspect_change", False),
-                "raw_ldraw": step_data_from_parent.get("raw_ldraw", ""),
-                "sub_parts": step_data_from_parent.get("sub_parts", {}),
+                "scale": step_data_from_parent["scale"],
+                "model_scale": step_data_from_parent["model_scale"],
+                "aspect": step_data_from_parent["aspect"],
+                "parts": step_data_from_parent["parts"],
+                "step_parts": step_data_from_parent["step_parts"],
+                "sub_models": step_data_from_parent[
+                    "sub_models"
+                ],  # ADDED: Ensure this is populated
+                "pli_bom": step_data_from_parent["pli_bom"],
+                "meta": step_data_from_parent["meta"],
+                "aspect_change": step_data_from_parent["aspect_change"],
+                "raw_ldraw": step_data_from_parent["raw_ldraw"],
+                "sub_parts": step_data_from_parent["sub_parts"],
+                "prev_level": 0,
+                "next_level": 0,
+                "page_break": False,
+                "callout": 0,
             }
-            unwrapped_list_accumulator.append(entry_for_unwrapped_list)  # type: ignore
+            unwrapped_list_accumulator.append(entry_for_unwrapped_list)
             next_global_idx += 1
 
         if is_top_level_call:
-            final_processed_list: List[Dict[str, Any]] = []
+            # Post-processing loop now operates on unwrapped_list_accumulator which is a List
+            final_processed_list: List[UnwrappedStepEntry] = (
+                unwrapped_list_accumulator  # Alias for clarity
+            )
             continuous_step_counter_for_main_flow = 1
             self.callouts = {}
             active_callout_start_indices: Dict[int, int] = {}
 
-            for i, entry_item_dict in enumerate(unwrapped_list_accumulator):  # type: ignore
-                entry_item_dict["prev_level"] = unwrapped_list_accumulator[i - 1]["level"] if i > 0 else 0  # type: ignore
+            for i, entry_item_dict in enumerate(final_processed_list):
+                entry_item_dict["prev_level"] = (
+                    final_processed_list[i - 1]["level"] if i > 0 else 0
+                )
                 entry_item_dict["next_level"] = (
-                    unwrapped_list_accumulator[i + 1]["level"]  # type: ignore
-                    if i < len(unwrapped_list_accumulator) - 1  # type: ignore
+                    final_processed_list[i + 1]["level"]
+                    if i < len(final_processed_list) - 1
                     else entry_item_dict["level"]
                 )
-
                 has_page_break_meta_cmd = any(
-                    "page_break" in m_cmd for m_cmd in entry_item_dict.get("meta", [])
+                    "page_break" in m_cmd for m_cmd in entry_item_dict["meta"]
                 )
                 is_no_callout_meta_cmd = any(
-                    "no_callout" in m_cmd for m_cmd in entry_item_dict.get("meta", [])
+                    "no_callout" in m_cmd for m_cmd in entry_item_dict["meta"]
                 )
-
                 entry_item_dict["page_break"] = has_page_break_meta_cmd or (
                     entry_item_dict["next_level"] > entry_item_dict["level"]
-                    and entry_item_dict.get("num_steps", 0) >= self.callout_step_thr
+                    and entry_item_dict["num_steps"] >= self.callout_step_thr
                     and not is_no_callout_meta_cmd
                 )
-
                 if (
                     entry_item_dict["level"] > entry_item_dict["prev_level"]
                     and not is_no_callout_meta_cmd
-                    and entry_item_dict.get("num_steps", 0) < self.callout_step_thr
+                    and entry_item_dict["num_steps"] < self.callout_step_thr
                 ):
                     active_callout_start_indices[entry_item_dict["level"]] = (
                         entry_item_dict["idx"]
                     )
-
                 current_callout_level_for_this_step = 0
                 for active_lvl_cs_key in sorted(
                     active_callout_start_indices.keys(), reverse=True
@@ -816,7 +831,6 @@ class LDRModel:
                         current_callout_level_for_this_step = active_lvl_cs_key
                         break
                 entry_item_dict["callout"] = current_callout_level_for_this_step
-
                 if entry_item_dict["level"] < entry_item_dict["prev_level"]:
                     if entry_item_dict["prev_level"] in active_callout_start_indices:
                         start_idx_of_completed_callout = (
@@ -824,76 +838,80 @@ class LDRModel:
                                 entry_item_dict["prev_level"]
                             )
                         )
-                        self.callouts[start_idx_of_completed_callout] = {
+                        callout_entry: CalloutData = {
                             "level": entry_item_dict["prev_level"],
-                            "end": unwrapped_list_accumulator[i - 1]["idx"],  # type: ignore
-                            "parent": unwrapped_list_accumulator[start_idx_of_completed_callout]["prev_level"],  # type: ignore
+                            "end": final_processed_list[i - 1]["idx"],
+                            "parent": final_processed_list[
+                                start_idx_of_completed_callout
+                            ]["prev_level"],
                         }
                         scale_meta_at_callout_start = next(
-                            (m_cmd for m_cmd in unwrapped_list_accumulator[start_idx_of_completed_callout].get("meta", []) if "model_scale" in m_cmd),  # type: ignore
+                            (
+                                m_cmd
+                                for m_cmd in final_processed_list[
+                                    start_idx_of_completed_callout
+                                ]["meta"]
+                                if "model_scale" in m_cmd
+                            ),
                             None,
                         )
                         if scale_meta_at_callout_start:
-                            self.callouts[start_idx_of_completed_callout][
-                                "scale"
-                            ] = float(
-                                scale_meta_at_callout_start["model_scale"]["values"][0]  # type: ignore
+                            meta_data = cast(
+                                MetaCommandData,
+                                scale_meta_at_callout_start.get("model_scale"),
                             )
-
+                            if (
+                                meta_data
+                                and "values" in meta_data
+                                and meta_data["values"]
+                            ):
+                                callout_entry["scale"] = float(meta_data["values"][0])
+                        self.callouts[start_idx_of_completed_callout] = callout_entry
                 if self.continuous_step_numbers and entry_item_dict["callout"] == 0:
-                    entry_item_dict["step"] = continuous_step_counter_for_main_flow
+                    entry_item_dict["step"] = (
+                        continuous_step_counter_for_main_flow  # 'step' is part of UnwrappedStepEntry via StepData
+                    )
                     continuous_step_counter_for_main_flow += 1
-
-                final_processed_list.append(entry_item_dict)
-
+                # No need to append to final_processed_list, it's the same list object
             if self.continuous_step_numbers:
                 self.continuous_step_count = continuous_step_counter_for_main_flow - 1
                 for e_fm_item_update in final_processed_list:
                     if e_fm_item_update["callout"] == 0:
                         e_fm_item_update["num_steps"] = self.continuous_step_count
-
             for e_fm_pli_item_update in final_processed_list:
-                for meta_item_cmd in e_fm_pli_item_update.get("meta", []):
-                    if (
-                        "pli_proxy" in meta_item_cmd
-                        and BOM
-                        and BOMPart
-                        and isinstance(e_fm_pli_item_update["pli_bom"], BOM)
-                    ):
-                        for item_str_val_proxy in meta_item_cmd["pli_proxy"].get("values", []):  # type: ignore
-                            pname_val_proxy, pcol_val_str_proxy = (
-                                item_str_val_proxy.split("_")  # type: ignore
-                                if "_" in item_str_val_proxy  # type: ignore
-                                else (item_str_val_proxy, str(LDR_DEF_COLOUR))
-                            )
-                            pcol_val_proxy = int(pcol_val_str_proxy)
-
-                            bom_part_instance_proxy = BOMPart(1, pname_val_proxy, pcol_val_proxy)  # type: ignore
-                            e_fm_pli_item_update["pli_bom"].add_part(bom_part_instance_proxy)  # type: ignore
-                            if self.bom:
-                                self.bom.add_part(bom_part_instance_proxy)
-            return final_processed_list  # type: ignore
-
-        return unwrapped_list_accumulator, next_global_idx  # type: ignore
+                for meta_item_cmd_dict in e_fm_pli_item_update["meta"]:
+                    if "pli_proxy" in meta_item_cmd_dict:
+                        pli_proxy_data = meta_item_cmd_dict["pli_proxy"]
+                        if BOM_AVAILABLE and isinstance(
+                            e_fm_pli_item_update["pli_bom"], BOM
+                        ):
+                            for item_str_val_proxy in pli_proxy_data.get("values", []):
+                                pname_val_proxy, pcol_val_str_proxy = (
+                                    item_str_val_proxy.split("_")
+                                    if "_" in item_str_val_proxy
+                                    else (item_str_val_proxy, str(LDR_DEF_COLOUR))
+                                )
+                                pcol_val_proxy = int(pcol_val_str_proxy)
+                                bom_part_instance_proxy = BOMPart(1, pname_val_proxy, pcol_val_proxy)  # type: ignore
+                                cast(BOM, e_fm_pli_item_update["pli_bom"]).add_part(
+                                    bom_part_instance_proxy
+                                )
+                                if self.bom:
+                                    self.bom.add_part(bom_part_instance_proxy)
+            return final_processed_list
+        return unwrapped_list_accumulator, next_global_idx
 
     def parse_model_steps(
         self,
         model_source_str_content: str,
         is_top_level: bool = True,
-    ) -> Tuple[Dict[int, List[LDRPart]], Dict[int, Dict[str, Any]]]:
-        """
-        Parses the LDraw string content of a single model (or submodel) into steps.
-        """
+    ) -> Tuple[Dict[int, List[LDRPart]], Dict[int, StepData]]:
         if not model_source_str_content.strip():
             return {}, {}
-
         pli_dict_for_this_model: Dict[int, List[LDRPart]] = {}
-        steps_dict_for_this_model: Dict[int, Dict[str, Any]] = {}
-
+        steps_dict_for_this_model: Dict[int, StepData] = {}
         step_blocks_raw = model_source_str_content.split("0 STEP")
-
         cumulative_parts_for_snapshot: List[LDRPart] = []
-
         current_aspect_list_for_model: List[float] = list(
             self.global_aspect if is_top_level else self.PARAMS["global_aspect"]
         )
@@ -901,7 +919,6 @@ class LDRModel:
             self.global_scale if is_top_level else self.PARAMS["global_scale"]
         )
         model_inherent_scale_preference = current_scale_for_model_view
-
         current_step_number = 1
 
         for i, single_step_raw_content in enumerate(step_blocks_raw):
@@ -911,34 +928,43 @@ class LDRModel:
                 and len(step_blocks_raw) > 1
             ):
                 continue
-
             meta_commands_in_step = get_meta_commands(single_step_raw_content)
             aspect_was_changed_by_meta_in_step = False
-
             for cmd_dict_item in meta_commands_in_step:
-                if "scale" in cmd_dict_item:
-                    current_scale_for_model_view = float(
-                        cmd_dict_item["scale"]["values"][0]
-                    )
-                elif "model_scale" in cmd_dict_item:
-                    model_inherent_scale_preference = float(
-                        cmd_dict_item["model_scale"]["values"][0]
-                    )
-                elif "rotation_abs" in cmd_dict_item:
-                    v_abs_rot = [
-                        float(x_val)
-                        for x_val in cmd_dict_item["rotation_abs"]["values"]
-                    ]
+                meta_cmd_data = next(
+                    iter(cmd_dict_item.values())
+                )  # Get the MetaCommandData
+                if (
+                    "scale" in cmd_dict_item
+                    and "values" in meta_cmd_data
+                    and meta_cmd_data["values"]
+                ):
+                    current_scale_for_model_view = float(meta_cmd_data["values"][0])
+                elif (
+                    "model_scale" in cmd_dict_item
+                    and "values" in meta_cmd_data
+                    and meta_cmd_data["values"]
+                ):
+                    model_inherent_scale_preference = float(meta_cmd_data["values"][0])
+                elif (
+                    "rotation_abs" in cmd_dict_item
+                    and "values" in meta_cmd_data
+                    and meta_cmd_data["values"]
+                ):
+                    v_abs_rot = [float(x_val) for x_val in meta_cmd_data["values"]]
                     current_aspect_list_for_model = [
                         -v_abs_rot[0],
                         v_abs_rot[1],
                         v_abs_rot[2],
                     ]
                     aspect_was_changed_by_meta_in_step = True
-                elif "rotation_rel" in cmd_dict_item:
+                elif (
+                    "rotation_rel" in cmd_dict_item
+                    and "values" in meta_cmd_data
+                    and meta_cmd_data["values"]
+                ):
                     v_rel_rot_vals = tuple(
-                        float(x_val)
-                        for x_val in cmd_dict_item["rotation_rel"]["values"]
+                        float(x_val) for x_val in meta_cmd_data["values"]
                     )
                     current_aspect_list_for_model[0] -= v_rel_rot_vals[0]
                     current_aspect_list_for_model[1] += v_rel_rot_vals[1]
@@ -952,20 +978,23 @@ class LDRModel:
                         )
                     )
                     aspect_was_changed_by_meta_in_step = True
-                elif "rotation_pre" in cmd_dict_item:
+                elif (
+                    "rotation_pre" in cmd_dict_item
+                    and "values" in meta_cmd_data
+                    and meta_cmd_data["values"]
+                ):
                     current_aspect_list_for_model = list(
                         preset_aspect(
                             cast(
                                 Tuple[float, float, float],
                                 tuple(current_aspect_list_for_model),
                             ),
-                            cmd_dict_item["rotation_pre"]["values"],  # type: ignore
+                            meta_cmd_data["values"],
                         )
                     )
                     aspect_was_changed_by_meta_in_step = True
 
             part_reference_dicts_in_step = get_parts_from_model(single_step_raw_content)
-
             ldr_parts_added_in_this_step: List[LDRPart] = []
             recursive_parse_model(
                 part_reference_dicts_in_step,
@@ -973,27 +1002,22 @@ class LDRModel:
                 ldr_parts_added_in_this_step,
                 reset_parts_list_on_call=True,
             )
-
             if (
                 not ldr_parts_added_in_this_step
                 and not meta_commands_in_step
                 and (i > 0 or not single_step_raw_content.strip())
             ):
                 continue
-
             pli_parts_for_this_step = self.transform_parts_to(
                 ldr_parts_added_in_this_step,
                 origin=(0, 0, 0),
                 aspect=self.pli_aspect,
                 use_exceptions=True,
             )
-
             cumulative_parts_for_snapshot.extend(ldr_parts_added_in_this_step)
-
             final_current_aspect_tuple_for_model = cast(
                 Tuple[float, float, float], tuple(current_aspect_list_for_model)
             )
-
             snapshot_model_parts_transformed_union = self.transform_parts(
                 cumulative_parts_for_snapshot,
                 aspect=final_current_aspect_tuple_for_model,
@@ -1006,7 +1030,6 @@ class LDRModel:
                 snapshot_model_parts_transformed = cast(
                     List[LDRPart], snapshot_model_parts_transformed_union
                 )
-
             snapshot_step_added_parts_transformed_union = self.transform_parts(
                 ldr_parts_added_in_this_step,
                 aspect=final_current_aspect_tuple_for_model,
@@ -1020,14 +1043,14 @@ class LDRModel:
                     List[LDRPart], snapshot_step_added_parts_transformed_union
                 )
 
-            pli_bom_for_this_step: Optional[BOM] = None
-            if BOM and BOMPart:
-                pli_bom_for_this_step = BOM()
+            pli_bom_for_this_step: PLIBomType = []
+            if BOM_AVAILABLE:
+                current_pli_bom = BOM()  # type: ignore
                 if self.bom and hasattr(self.bom, "ignore_parts"):
-                    pli_bom_for_this_step.ignore_parts = self.bom.ignore_parts
+                    current_pli_bom.ignore_parts = self.bom.ignore_parts  # type: ignore
                 for p_part_item in pli_parts_for_this_step:
-                    pli_bom_for_this_step.add_part(BOMPart(1, p_part_item.name, p_part_item.attrib.colour))  # type: ignore
-
+                    current_pli_bom.add_part(BOMPart(1, p_part_item.name, p_part_item.attrib.colour))  # type: ignore
+                pli_bom_for_this_step = current_pli_bom
                 if is_top_level and self.bom:
                     for p_part_item in pli_parts_for_this_step:
                         self.bom.add_part(BOMPart(1, p_part_item.name, p_part_item.attrib.colour))  # type: ignore
@@ -1037,13 +1060,11 @@ class LDRModel:
                 for pd_item in part_reference_dicts_in_step
                 if pd_item["partname"] in self.sub_models
             ]
-
             sub_parts_snapshot_view_dict: Dict[str, List[LDRPart]] = {}
             for sub_name_key_ref in unique_set(submodel_names_referenced_in_step_lines):
                 submodel_definition_part_dicts = self.sub_models.get(
                     sub_name_key_ref, []
                 )
-
                 temp_list_for_submodel_content_parts: List[LDRPart] = []
                 recursive_parse_model(
                     submodel_definition_part_dicts,
@@ -1063,7 +1084,8 @@ class LDRModel:
                         List[LDRPart], transformed_sub_content_parts_union
                     )
 
-            steps_dict_for_this_model[current_step_number] = {
+            current_step_data: StepData = {
+                "step": current_step_number,  # Added step number here
                 "parts": snapshot_model_parts_transformed,
                 "step_parts": snapshot_step_added_parts_transformed,
                 "sub_models": submodel_names_referenced_in_step_lines,
@@ -1071,24 +1093,18 @@ class LDRModel:
                 "scale": current_scale_for_model_view,
                 "model_scale": model_inherent_scale_preference,
                 "raw_ldraw": single_step_raw_content,
-                "pli_bom": (
-                    pli_bom_for_this_step
-                    if pli_bom_for_this_step
-                    else (BOM() if BOM else [])
-                ),
+                "pli_bom": pli_bom_for_this_step,
                 "meta": meta_commands_in_step,
                 "aspect_change": aspect_was_changed_by_meta_in_step,
                 "sub_parts": sub_parts_snapshot_view_dict,
             }
+            steps_dict_for_this_model[current_step_number] = current_step_data
 
             if pli_parts_for_this_step:
                 pli_dict_for_this_model[current_step_number] = pli_parts_for_this_step
-
             current_step_number += 1
-
             if is_top_level:
                 progress_bar(
                     i + 1, len(step_blocks_raw), "Parsing Model Steps:", length=50
                 )
-
         return pli_dict_for_this_model, steps_dict_for_this_model
