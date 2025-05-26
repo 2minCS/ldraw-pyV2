@@ -1,57 +1,79 @@
-"""ldrawpy - A utility package for creating, modifying, and reading LDraw files and data structures."""
+"""
+ldrawpy - A Python utility package for LDraw files.
 
-import os
+This package provides classes and functions for creating, modifying, reading,
+and processing LDraw files and their associated data structures. It includes
+tools for handling LDraw primitives (parts, lines, triangles, quads), colours,
+geometric shapes, model parsing, LDView rendering automation, arrow generation
+for instructions, and pretty-printing LDraw content to the console.
+
+The main components are organized into submodules:
+- constants: Defines common LDraw constants, colour codes, and meta-command tokens.
+- ldrcolour: Provides the LDRColour class for colour management and conversions.
+- ldrcolourdict: Contains dictionaries mapping LDraw colour codes to names, RGB, etc.
+- ldrhelpers: Utility functions for LDraw value formatting, geometry, and list manipulation.
+- ldrprimitives: Defines core LDraw objects like LDRAttrib, LDRPart, LDRLine, etc.
+- ldrshapes: Classes for generating common geometric shapes using LDraw primitives.
+- ldrmodel: The LDRModel class for parsing and managing complex LDraw models and MPD files.
+- ldvrender: The LDViewRender class for automating rendering with LDView.
+- ldrarrows: Utilities for generating arrow annotations in LDraw.
+- ldrpprint: Functions for pretty-printing LDraw lines with syntax highlighting.
+- ldrawpy (module): Contains miscellaneous top-level utility functions.
+
+Key classes and functions are re-exported here for easier access from the package root.
+"""
+
+import os  # Retained for potential use, though not directly used by __init__ itself.
 
 # fmt: off
-__project__ = 'ldrawpyV2' # Updated project name
-# Version for V2, alpha. Ensure no inline comments here that parsing might pick up.
-__version__ = '2.0.0a1'
+__project__ = 'ldrawpyV2' 
+__version__ = '2.0.0a1' 
 # fmt: on
 
-VERSION = __project__ + "-" + __version__
+VERSION = f"{__project__}-{__version__}"  # Use f-string for version concatenation
 
-# Selective and organized imports for the package's public API
+# --- Selective and organized imports for the package's public API ---
 
 # From .constants
 from .constants import (
-    LDR_OPT_COLOUR,
-    LDR_DEF_COLOUR,
-    LDR_ALL_COLOUR,
-    LDR_ANY_COLOUR,
-    LDR_OTHER_COLOUR,
-    LDR_MONO_COLOUR,
-    LDR_BLKWHT_COLOUR,
-    LDR_GRAY_COLOUR,
-    LDR_REDYLW_COLOUR,
-    LDR_BLUYLW_COLOUR,
-    LDR_REDBLUYLW_COLOUR,
-    LDR_GRNBRN_COLOUR,
-    LDR_BLUBRN_COLOUR,
-    LDR_BRGREEN_COLOUR,
-    LDR_LAVENDER_COLOUR,
-    LDR_PINK_COLOUR,
-    LDR_LTYLW_COLOUR,
-    LDR_BLUBLU_COLOUR,
-    LDR_DKREDBLU_COLOUR,
-    LDR_ORGYLW_COLOUR,
-    LDR_ORGBRN_COLOUR,
-    LDR_BLUES_COLOUR,
-    LDR_GREENS_COLOUR,
-    LDR_YELLOWS_COLOUR,
-    LDR_REDORG_COLOUR,
-    LDR_TANBRN_COLOUR,
-    LDR_REDORGYLW_COLOUR,
-    LDR_BLUGRN_COLOUR,
-    LDR_TAN_COLOUR,
-    LDR_PINKPURP_COLOUR,
-    LDR_ANY_COLOUR_FILL,
+    ASPECT_DICT,
+    FLIP_DICT,
     LDRAW_TOKENS,
     META_TOKENS,
     SPECIAL_TOKENS,
-    LDR_DEFAULT_SCALE,
+    LDR_ALL_COLOUR,
+    LDR_ANY_COLOUR,
+    LDR_ANY_COLOUR_FILL,
+    LDR_BLUBLU_COLOUR,
+    LDR_BLUES_COLOUR,
+    LDR_BLUGRN_COLOUR,
+    LDR_BLUBRN_COLOUR,
+    LDR_BLUYLW_COLOUR,
+    LDR_BLKWHT_COLOUR,
+    LDR_BRGREEN_COLOUR,
     LDR_DEFAULT_ASPECT,
-    ASPECT_DICT,
-    FLIP_DICT,
+    LDR_DEFAULT_SCALE,
+    LDR_DEF_COLOUR,
+    LDR_DKREDBLU_COLOUR,
+    LDR_GRAY_COLOUR,
+    LDR_GREENS_COLOUR,
+    LDR_GRNBRN_COLOUR,
+    LDR_LAVENDER_COLOUR,
+    LDR_LTYLW_COLOUR,
+    LDR_MONO_COLOUR,
+    LDR_OPT_COLOUR,
+    LDR_ORGBRN_COLOUR,
+    LDR_ORGYLW_COLOUR,
+    LDR_OTHER_COLOUR,
+    LDR_PINK_COLOUR,
+    LDR_PINKPURP_COLOUR,
+    LDR_REDBLUYLW_COLOUR,
+    LDR_REDORG_COLOUR,
+    LDR_REDORGYLW_COLOUR,
+    LDR_REDYLW_COLOUR,
+    LDR_TAN_COLOUR,
+    LDR_TANBRN_COLOUR,
+    LDR_YELLOWS_COLOUR,
 )
 
 # From .ldrcolour and .ldrcolourdict
@@ -67,64 +89,58 @@ from .ldrcolourdict import (
 
 # From .ldrhelpers
 from .ldrhelpers import (
-    quantize,
-    MM2LDU,
-    LDU2MM,
-    val_units,
-    mat_str,
-    vector_str,
     GetCircleSegments,
+    LDU2MM,
+    MM2LDU,
+    clean_file,
+    clean_line,
     ldrlist_from_parts,
     ldrstring_from_list,
+    mat_str,
     merge_same_parts,
-    remove_parts_from_list,
     norm_angle,
     norm_aspect,
     preset_aspect,
-    clean_line,
-    clean_file,
+    quantize,
+    remove_parts_from_list,
+    val_units,
+    vector_str,
 )
 
 # From .ldrprimitives
-from .ldrprimitives import (
-    LDRAttrib,
-    LDRHeader,
-    LDRLine,
-    LDRTriangle,
-    LDRQuad,
-    LDRPart,
-)
+from .ldrprimitives import LDRAttrib, LDRHeader, LDRLine, LDRPart, LDRQuad, LDRTriangle
 
 # From .ldrshapes
 from .ldrshapes import (
-    LDRPolyWall,
-    LDRRect,
+    LDRBox,
     LDRCircle,
+    LDRCylinder,
     LDRDisc,
     LDRHole,
-    LDRCylinder,
-    LDRBox,
+    LDRPolyWall,
+    LDRRect,
 )
 
 # From .ldrmodel
+# Aliasing imported constants from ldrmodel to avoid name clashes if they were also in constants.py
 from .ldrmodel import (
-    LDRModel,
-    substitute_part,
-    line_has_all_tokens,
-    parse_special_tokens,
-    get_meta_commands,
-    get_parts_from_model,
-    recursive_parse_model,
-    unique_set,
-    key_name,
-    key_colour,
-    get_sha1_hash,
-    sort_parts,
-    START_TOKENS as MODEL_START_TOKENS,
+    COMMON_SUBSTITUTIONS as MODEL_COMMON_SUBSTITUTIONS,
     END_TOKENS as MODEL_END_TOKENS,
     EXCEPTION_LIST as MODEL_EXCEPTION_LIST,
     IGNORE_LIST as MODEL_IGNORE_LIST,
-    COMMON_SUBSTITUTIONS as MODEL_COMMON_SUBSTITUTIONS,
+    LDRModel,
+    START_TOKENS as MODEL_START_TOKENS,
+    get_meta_commands,
+    get_parts_from_model,
+    get_sha1_hash,
+    key_colour,
+    key_name,
+    line_has_all_tokens,
+    parse_special_tokens,
+    recursive_parse_model,
+    sort_parts,
+    substitute_part,
+    unique_set,
 )
 
 # From .ldvrender
@@ -132,84 +148,116 @@ from .ldvrender import LDViewRender, camera_distance
 
 # From .ldrarrows
 from .ldrarrows import (
+    ARROW_MX,
+    ARROW_MY,
+    ARROW_MZ,
+    ARROW_PARTS,
+    ARROW_PLI,
+    ARROW_PLI_SUFFIX,
+    ARROW_PREFIX,
+    ARROW_PX,
+    ARROW_PY,
+    ARROW_PZ,
+    ARROW_SUFFIX,
     ArrowContext,
     arrows_for_step,
-    remove_offset_parts as remove_arrow_offset_parts,
-    ARROW_PREFIX,
-    ARROW_PLI,
-    ARROW_SUFFIX,
-    ARROW_PLI_SUFFIX,
-    ARROW_PARTS,
-    ARROW_MZ,
-    ARROW_PZ,
-    ARROW_MX,
-    ARROW_PX,
-    ARROW_MY,
-    ARROW_PY,
-    value_after_token as arrow_value_after_token,  # CORRECTED: Import original name and alias it
     norm_angle_arrow,
+    remove_offset_parts as remove_arrow_offset_parts,  # Aliased for clarity
+    value_after_token as arrow_value_after_token,  # Aliased to avoid potential clashes
     vectorize_arrow,
 )
 
 # From .ldrpprint
 from .ldrpprint import (
-    pprint_ldr_colour,
+    is_hex_colour,
     pprint_coord_str,
+    pprint_ldr_colour,
+    pprint_line,
+    pprint_line0,
     pprint_line1,
     pprint_line2345,
-    pprint_line0,
-    pprint_line,
-    is_hex_colour,
 )
 
-# From .ldrawpy (top-level module, often named same as package)
-from .ldrawpy import (
-    brick_name_strip,
-    xyz_to_ldr,
-    mesh_to_ldr,
-)
+# From .ldrawpy (top-level utility module, often named same as package)
+from .ldrawpy import brick_name_strip, mesh_to_ldr, xyz_to_ldr
 
 # Define __all__ to specify the public API explicitly
+# Sorted alphabetically for easier maintenance.
 __all__ = [
-    # Constants
+    # .constants
+    "ASPECT_DICT",
+    "FLIP_DICT",
+    "LDRAW_TOKENS",
+    "LDR_ALL_COLOUR",
+    "LDR_ANY_COLOUR",
+    "LDR_ANY_COLOUR_FILL",
+    "LDR_BLUBLU_COLOUR",
+    "LDR_BLUES_COLOUR",
+    "LDR_BLUGRN_COLOUR",
+    "LDR_BLUBRN_COLOUR",
+    "LDR_BLUYLW_COLOUR",
+    "LDR_BLKWHT_COLOUR",
+    "LDR_BRGREEN_COLOUR",
+    "LDR_DEFAULT_ASPECT",
+    "LDR_DEFAULT_SCALE",
     "LDR_DEF_COLOUR",
+    "LDR_DKREDBLU_COLOUR",
+    "LDR_GRAY_COLOUR",
+    "LDR_GREENS_COLOUR",
+    "LDR_GRNBRN_COLOUR",
+    "LDR_LAVENDER_COLOUR",
+    "LDR_LTYLW_COLOUR",
+    "LDR_MONO_COLOUR",
     "LDR_OPT_COLOUR",
+    "LDR_ORGBRN_COLOUR",
+    "LDR_ORGYLW_COLOUR",
+    "LDR_OTHER_COLOUR",
+    "LDR_PINK_COLOUR",
+    "LDR_PINKPURP_COLOUR",
+    "LDR_REDBLUYLW_COLOUR",
+    "LDR_REDORG_COLOUR",
+    "LDR_REDORGYLW_COLOUR",
+    "LDR_REDYLW_COLOUR",
+    "LDR_TAN_COLOUR",
+    "LDR_TANBRN_COLOUR",
+    "LDR_YELLOWS_COLOUR",
+    "META_TOKENS",
     "SPECIAL_TOKENS",
-    # ldrcolour & ldrcolourdict
+    # .ldrcolour & .ldrcolourdict
+    "BL_TO_LDR_COLOUR",
+    "FillColoursFromLDRCode",
+    "FillTitlesFromLDRCode",
     "LDRColour",
     "LDR_COLOUR_NAME",
     "LDR_COLOUR_RGB",
-    "FillColoursFromLDRCode",
-    "FillTitlesFromLDRCode",
-    "BL_TO_LDR_COLOUR",
     "LDR_COLOUR_TITLE",
     "LDR_FILL_CODES",
     "LDR_FILL_TITLES",
-    # ldrhelpers
-    "quantize",
-    "clean_line",
+    # .ldrhelpers
+    "GetCircleSegments",
+    "LDU2MM",
+    "MM2LDU",
     "clean_file",
-    "vector_str",
-    "mat_str",
-    "norm_aspect",
+    "clean_line",
     "ldrlist_from_parts",
     "ldrstring_from_list",
+    "mat_str",
     "merge_same_parts",
-    "remove_parts_from_list",
-    "MM2LDU",
-    "LDU2MM",
-    "val_units",
-    "GetCircleSegments",
     "norm_angle",
+    "norm_aspect",
     "preset_aspect",
-    # ldrprimitives
+    "quantize",
+    "remove_parts_from_list",
+    "val_units",
+    "vector_str",
+    # .ldrprimitives
     "LDRAttrib",
     "LDRHeader",
     "LDRLine",
-    "LDRTriangle",
-    "LDRQuad",
     "LDRPart",
-    # ldrshapes
+    "LDRQuad",
+    "LDRTriangle",
+    # .ldrshapes
     "LDRBox",
     "LDRCircle",
     "LDRCylinder",
@@ -217,59 +265,65 @@ __all__ = [
     "LDRHole",
     "LDRPolyWall",
     "LDRRect",
-    # ldrmodel
+    # .ldrmodel
     "LDRModel",
-    "substitute_part",
-    "get_parts_from_model",
-    "sort_parts",
-    "get_sha1_hash",
     "MODEL_COMMON_SUBSTITUTIONS",
-    "line_has_all_tokens",
-    "parse_special_tokens",
-    "get_meta_commands",
-    "recursive_parse_model",
-    "unique_set",
-    "key_name",
-    "key_colour",
-    "MODEL_START_TOKENS",
     "MODEL_END_TOKENS",
     "MODEL_EXCEPTION_LIST",
     "MODEL_IGNORE_LIST",
-    # ldvrender
+    "MODEL_START_TOKENS",
+    "get_meta_commands",
+    "get_parts_from_model",
+    "get_sha1_hash",
+    "key_colour",
+    "key_name",
+    "line_has_all_tokens",
+    "parse_special_tokens",
+    "recursive_parse_model",
+    "sort_parts",
+    "substitute_part",
+    "unique_set",
+    # .ldvrender
     "LDViewRender",
     "camera_distance",
-    # ldrarrows
-    "ArrowContext",
-    "arrows_for_step",
-    "remove_arrow_offset_parts",
-    "ARROW_PARTS",
-    "ARROW_PREFIX",
-    "ARROW_PLI",
-    "ARROW_SUFFIX",
-    "ARROW_PLI_SUFFIX",
-    "ARROW_MZ",
-    "ARROW_PZ",
+    # .ldrarrows
     "ARROW_MX",
-    "ARROW_PX",
     "ARROW_MY",
+    "ARROW_MZ",
+    "ARROW_PARTS",
+    "ARROW_PLI",
+    "ARROW_PLI_SUFFIX",
+    "ARROW_PREFIX",
+    "ARROW_PX",
     "ARROW_PY",
-    "arrow_value_after_token",  # This now refers to the aliased name
+    "ARROW_PZ",
+    "ARROW_SUFFIX",
+    "ArrowContext",
+    "arrow_value_after_token",
+    "arrows_for_step",
     "norm_angle_arrow",
+    "remove_arrow_offset_parts",
     "vectorize_arrow",
-    # ldrpprint
-    "pprint_line",
+    # .ldrpprint
     "is_hex_colour",
-    "pprint_ldr_colour",
     "pprint_coord_str",
+    "pprint_ldr_colour",
+    "pprint_line",
+    "pprint_line0",
     "pprint_line1",
     "pprint_line2345",
-    "pprint_line0",
-    # ldrawpy (main module)
+    # .ldrawpy (main module utilities)
     "brick_name_strip",
-    "xyz_to_ldr",
     "mesh_to_ldr",
-    # Version info
+    "xyz_to_ldr",
+    # Package version info
     "__project__",
     "__version__",
     "VERSION",
 ]
+
+# Clean up os import if it's truly not needed by any conditional logic within __init__
+# For now, it's kept as it was in the original file, but often not needed here.
+# If, for example, __init__.py needed to dynamically find resources based on its path,
+# os might be used, but that's not apparent here.
+del os
