@@ -23,24 +23,21 @@ The main components are organized into submodules:
 Key classes and functions are re-exported here for easier access from the package root.
 """
 
-import os  # Retained for potential use, though not directly used by __init__ itself.
+# import os # Retained for potential use, though not directly used by __init__ itself.
 
 # fmt: off
 __project__ = 'ldrawpyV2' 
 __version__ = '2.0.0a1' 
 # fmt: on
 
-VERSION = f"{__project__}-{__version__}"  # Use f-string for version concatenation
+VERSION = f"{__project__}-{__version__}"
 
 # --- Selective and organized imports for the package's public API ---
 
 # From .constants
 from .constants import (
     ASPECT_DICT,
-    FLIP_DICT,
-    LDRAW_TOKENS,
-    META_TOKENS,
-    SPECIAL_TOKENS,
+    FLIP_DICT,  # LDRAW_TOKENS, META_TOKENS, SPECIAL_TOKENS, # REMOVED from public API
     LDR_ALL_COLOUR,
     LDR_ANY_COLOUR,
     LDR_ANY_COLOUR_FILL,
@@ -130,14 +127,14 @@ from .ldrmodel import (
     IGNORE_LIST as MODEL_IGNORE_LIST,
     LDRModel,
     START_TOKENS as MODEL_START_TOKENS,
-    get_meta_commands,
+    # get_meta_commands, # Considered internal
     get_parts_from_model,
     get_sha1_hash,
-    key_colour,
-    key_name,
-    line_has_all_tokens,
-    parse_special_tokens,
-    recursive_parse_model,
+    # key_colour, # Considered internal sort helper
+    # key_name, # Considered internal sort helper
+    # line_has_all_tokens, # Considered internal / too specific
+    # parse_special_tokens, # Considered internal
+    # recursive_parse_model, # Considered internal
     sort_parts,
     substitute_part,
     unique_set,
@@ -162,8 +159,8 @@ from .ldrarrows import (
     ArrowContext,
     arrows_for_step,
     norm_angle_arrow,
-    remove_offset_parts as remove_arrow_offset_parts,  # Aliased for clarity
-    value_after_token as arrow_value_after_token,  # Aliased to avoid potential clashes
+    remove_offset_parts as remove_arrow_offset_parts,
+    value_after_token as arrow_value_after_token,
     vectorize_arrow,
 )
 
@@ -187,7 +184,6 @@ __all__ = [
     # .constants
     "ASPECT_DICT",
     "FLIP_DICT",
-    "LDRAW_TOKENS",
     "LDR_ALL_COLOUR",
     "LDR_ANY_COLOUR",
     "LDR_ANY_COLOUR_FILL",
@@ -221,8 +217,6 @@ __all__ = [
     "LDR_TAN_COLOUR",
     "LDR_TANBRN_COLOUR",
     "LDR_YELLOWS_COLOUR",
-    "META_TOKENS",
-    "SPECIAL_TOKENS",
     # .ldrcolour & .ldrcolourdict
     "BL_TO_LDR_COLOUR",
     "FillColoursFromLDRCode",
@@ -272,17 +266,17 @@ __all__ = [
     "MODEL_EXCEPTION_LIST",
     "MODEL_IGNORE_LIST",
     "MODEL_START_TOKENS",
-    "get_meta_commands",
     "get_parts_from_model",
     "get_sha1_hash",
-    "key_colour",
-    "key_name",
-    "line_has_all_tokens",
-    "parse_special_tokens",
-    "recursive_parse_model",
     "sort_parts",
     "substitute_part",
     "unique_set",
+    # "get_meta_commands", # Removed from __all__
+    # "key_colour", # Removed from __all__
+    # "key_name", # Removed from __all__
+    # "line_has_all_tokens", # Removed from __all__
+    # "parse_special_tokens", # Removed from __all__
+    # "recursive_parse_model", # Removed from __all__
     # .ldvrender
     "LDViewRender",
     "camera_distance",
@@ -323,7 +317,7 @@ __all__ = [
 ]
 
 # Clean up os import if it's truly not needed by any conditional logic within __init__
-# For now, it's kept as it was in the original file, but often not needed here.
-# If, for example, __init__.py needed to dynamically find resources based on its path,
-# os might be used, but that's not apparent here.
-del os
+# import os # This line was commented out in the source, keeping it that way.
+# If os was truly needed, it should be uncommented. For now, assume it's not.
+# If it was used by a deleted line, `del os` is not necessary. If imported and not used, `del os` is fine.
+# Since it's commented out in the source, no action needed for `os` here.
